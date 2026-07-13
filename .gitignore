@@ -1,0 +1,7 @@
+node_modules/
+output/
+*.docx
+.DS_Store
+*.log
+cc-switch/
+document.xml
