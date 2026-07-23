@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>信息科技课堂常规 · 教学管理思维导图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f0f4f8;
+    height: 100vh;
+    overflow: hidden;
+  }
+  #toolbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: linear-gradient(135deg, #1a237e, #283593);
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  #toolbar .left h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  #toolbar .left .sub {
+    font-size: 12px;
+    opacity: 0.8;
+  }
+  #toolbar .controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  #toolbar button {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 5px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    white-space: nowrap;
+    user-select: none;
+  }
+  #toolbar button:hover { background: rgba(255,255,255,0.25); }
+  #toolbar button:active { transform: scale(0.96); }
+  #toolbar .badge {
+    background: #ffd54f;
+    color: #1a237e;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  #toolbar .scale-info {
+    color: rgba(255,255,255,0.7);
+    font-size: 13px;
+    min-width: 48px;
+    text-align: center;
+  }
+  #mindmap-wrap {
+    position: fixed;
+    top: 54px; left: 0; right: 0; bottom: 0;
+  }
+  #mindmap-wrap svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .markmap-foreign {
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+  }
+  .markmap-foreign strong { color: #1a237e; }
+  .markmap-foreign .emoji { font-size: 1.2em; }
+  #loading {
+    position: fixed; top: 54px; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    background: #f0f4f8;
+    color: #555;
+    font-size: 16px;
+    z-index: 50;
+  }
+  #loading .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid #ddd;
+    border-top-color: #1a237e;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #error {
+    display: none;
+    position: fixed; top: 54px; left: 0; right: 0; bottom: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    background: #f0f4f8;
+    color: #c62828;
+    font-size: 16px;
+    z-index: 50;
+    padding: 40px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <div class="left">
+    <h1>🧑‍🏫 信息科技课堂常规 · 教学管理思维导图</h1>
+    <div class="sub">金华市站前小学 · 2025.10.30</div>
+  </div>
+  <div class="controls">
+    <span class="badge">🖱️ 滚轮缩放 · 拖拽平移</span>
+    <button id="btnFit">🔲 适应</button>
+    <button id="btnZoomIn">➕</button>
+    <span class="scale-info" id="scaleDisplay">100%</span>
+    <button id="btnZoomOut">➖</button>
+  </div>
+</div>
+
+<div id="loading"><div class="spinner"></div>正在加载思维导图...</div>
+<div id="error"></div>
+<div id="mindmap-wrap"><svg id="markmap-svg"></svg></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.4/dist/browser/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.4/dist/browser/index.js"></script>
+
+<script>
+(function() {
+  const md = [
+'# 🏫 信息科技课堂常规',
+'',
+'## 📋 习惯 ❀',
+'',
+'### 📚 课前',
+'1. **准备**：准备一支笔，提前 3 分钟排队进教室',
+'2. **入座**：对号入座，电脑正确开机',
+'3. **责任**：保护设备，"谁使用谁负责"的原则',
+'4. 🚫 **课堂禁令（12条）**',
+'   1. 禁大声喧哗',
+'   2. 禁饮料 / 零食',
+'   3. 禁霸占座位',
+'   4. 禁拍打屏幕、键盘、鼠标',
+'   5. 禁抠鼠标滚轮和键盘按键',
+'   6. 设备破损照价赔偿（故意损坏 7 倍赔偿）',
+'   7. 禁乱扔垃圾',
+'   8. 禁强制按"电源键"关机',
+'   9. 禁在桌子上乱涂乱画',
+'   10. 禁抠红色电脑序号',
+'   11. 未经允许，禁玩游戏 / 视频',
+'   12. 禁发表不良言论',
+'',
+'### 🏁 课后',
+'1. 将文件保存，电脑正确关机',
+'2. 鼠标、键盘、凳子归位，带回个人物品',
+'3. 检查卫生',
+'4. 排队回教室',
+'',
+'## ⭐ 努力 ☆',
+'',
+'### 🎯 课中',
+'1. 积极举手回答问题',
+'2. **提交作业**：纸质 / 电子',
+'3. **星级点评机制**',
+'   - 全对 → "作业做得很棒，请你继续保持"',
+'   - 错一题 → "作业完成较好，细节仍需改进"',
+'   - 仅对一题 → "老师期待你的进步，加油"',
+'   - 全错 → "作业错误太多，请及时订正"',
+'   - 未做 → "作业未完成，良好习惯从小事做起"',
+'4. **二次批改**：订正处打上"已订正"',
+'',
+'### 📊 测试评分标准',
+'1. ❌ **未交** → —',
+'2. 📉 **不及格** [0, 60) → ☆',
+'3. 📗 **及格** [60, 70) → ☆☆',
+'4. 📘 **良好** [70, 85) → ☆☆☆',
+'5. 📕 **优秀** [85, 100] → ☆☆☆☆☆',
+'',
+'## 💝 爱心 ❤',
+'1. 课堂主动关心帮助同学 / 老师',
+'2. 组长帮忙收发小组的书本和作业本',
+  ].join('\n');
+
+  let mm = null;
+
+  function render() {
+    const loading = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+
+    try {
+      const { Transformer } = window.markmap;
+      const { Markmap } = window.markmap;
+
+      if (!Transformer || !Markmap) {
+        throw new Error('markmap 库加载不完整');
+      }
+
+      const svg = document.getElementById('markmap-svg');
+      svg.innerHTML = '';
+
+      const transformer = new Transformer();
+      const { root } = transformer.transform(md);
+
+      mm = Markmap.create('#markmap-svg', {
+        zoomFitMaxRatio: 1,
+        initialExpandLevel: 3,
+        maxWidth: 380,
+        nodeMinHeight: 18,
+        spacingVertical: 7,
+        spacingHorizontal: 14,
+        paddingX: 12,
+        paddingY: 6,
+        colorFreezeLevel: 2,
+      }, root);
+
+      loading.style.display = 'none';
+
+      setTimeout(function() { mm.fit(); }, 200);
+    } catch (e) {
+      loading.style.display = 'none';
+      errorDiv.style.display = 'flex';
+      errorDiv.innerHTML = '<h3>❌ 加载失败</h3><p>' + e.message + '</p><p style="color:#666;font-size:14px;margin-top:8px;">请检查网络连接后刷新页面</p>';
+    }
+  }
+
+  function zoomIn() {
+    if (!mm) return;
+    var g = document.querySelector('#markmap-svg g[transform]');
+    if (!g) return;
+    var t = g.getAttribute('transform') || '';
+    var m = t.match(/scale\(([\d.]+)\)/);
+    var cur = m ? parseFloat(m[1]) : 1;
+    var s = Math.min(cur * 1.35, 8);
+    g.setAttribute('transform', t.replace(/scale\([\d.]+\)/, 'scale(' + s + ')'));
+    document.getElementById('scaleDisplay').textContent = Math.round(s * 100) + '%';
+  }
+
+  function zoomOut() {
+    if (!mm) return;
+    var g = document.querySelector('#markmap-svg g[transform]');
+    if (!g) return;
+    var t = g.getAttribute('transform') || '';
+    var m = t.match(/scale\(([\d.]+)\)/);
+    var cur = m ? parseFloat(m[1]) : 1;
+    var s = Math.max(cur / 1.35, 0.15);
+    g.setAttribute('transform', t.replace(/scale\([\d.]+\)/, 'scale(' + s + ')'));
+    document.getElementById('scaleDisplay').textContent = Math.round(s * 100) + '%';
+  }
+
+  function fitMap() {
+    if (!mm) return;
+    mm.fit();
+    document.getElementById('scaleDisplay').textContent = '100%';
+  }
+
+  function watchZoom() {
+    function check() {
+      var g = document.querySelector('#markmap-svg g[transform]');
+      if (g) {
+        var obs = new MutationObserver(function() {
+          var t = g.getAttribute('transform') || '';
+          var m = t.match(/scale\(([\d.]+)\)/);
+          if (m) {
+            document.getElementById('scaleDisplay').textContent = Math.round(parseFloat(m[1]) * 100) + '%';
+          }
+        });
+        obs.observe(g, { attributes: true, attributeFilter: ['transform'] });
+      } else {
+        setTimeout(check, 300);
+      }
+    }
+    check();
+  }
+
+  document.getElementById('btnFit').addEventListener('click', fitMap);
+  document.getElementById('btnZoomIn').addEventListener('click', zoomIn);
+  document.getElementById('btnZoomOut').addEventListener('click', zoomOut);
+
+  if (document.readyState === 'complete') {
+    render();
+    watchZoom();
+  } else {
+    window.addEventListener('load', function() {
+      render();
+      watchZoom();
+    });
+  }
+})();
+</script>
+</body>
+</html>
