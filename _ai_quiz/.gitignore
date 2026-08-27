@@ -1,0 +1,16 @@
+# 运行时数据（含密码哈希、学生进度；整体拷贝部署时保留在磁盘上，不入库）
+app/data/
+
+# 大模型密钥（部署时手动放入，勿提交）
+app/llm.config.json
+
+# 日志
+*.log
+*.err
+
+# 隧道运行状态（地址会随重启变化）
+CURRENT_URL.txt
+
+# PPT/文档临时检查产物
+tools/inspect_out.txt
+tools/pptx_extract/

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小AI探险队 · 知识阅读馆</title>
+<link rel="stylesheet" href="/assets/shared.css">
+<style>
+  .entry-card {
+    display: block; width: 100%; margin-top: 14px; padding: 16px; border: none;
+    border-radius: 12px; cursor: pointer; text-align: left; font-family: inherit;
+    background: linear-gradient(135deg, #6a5cff, #9b8cff); color: #fff;
+    box-shadow: 0 4px 14px rgba(106, 92, 255, .25);
+  }
+  .entry-card .t { font-size: 17px; font-weight: 700; }
+  .entry-card .d { font-size: 13px; opacity: .92; margin-top: 5px; line-height: 1.5; }
+  .entry-card.plain { background: #f0f0f5; color: #333; box-shadow: none; }
+  .entry-card.plain:hover { background: #e6e6ee; }
+  .entry-card:first-child { margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="topbar"><div class="container"><h1>🤖 小AI探险队 · AI知识学习乐园</h1></div></div>
+<div class="container">
+  <div class="login-box">
+    <div class="card center">
+      <h2>欢迎回来，探险家！</h2>
+      <p class="tip mb">选择你想去的地方</p>
+      <button class="entry-card" onclick="location.href='/reading.html'">
+        <div class="t">📚 小AI探险队 · 知识阅读馆</div>
+        <div class="d">读故事 → 和AI伙伴点点聊天 → 闯关攒积分换徽章，一起探索人工智能的奇妙世界</div>
+      </button>
+      <button class="entry-card plain" onclick="location.href='/student'">
+        <div class="t">👦 学生入口 · 知识答题</div>
+        <div class="d">日常打卡答题、排行榜、错题本（原有功能照常使用）</div>
+      </button>
+      <button class="entry-card plain" onclick="location.href='/teacher'">
+        <div class="t">👩‍🏫 教师入口</div>
+        <div class="d">管理学生、查看答题与阅读统计</div>
+      </button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

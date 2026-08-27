@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学生端 · AI知识竞赛答题</title>
+<link rel="stylesheet" href="/assets/shared.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="container">
+    <h1>🤖 AI知识竞赛 · 学生端</h1>
+    <span class="who hidden" id="who"></span>
+    <button class="sm hidden" id="logoutBtn">退出</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 登录 -->
+  <div id="loginBox" class="login-box hidden">
+    <div class="card">
+      <h2 class="center">学生登录</h2>
+      <label>姓名</label>
+      <input id="loginName" placeholder="请输入你的名字">
+      <label>密码</label>
+      <input id="loginPw" type="password" placeholder="请输入密码">
+      <button class="mt" style="width:100%; padding:12px;" onclick="doLogin()">进入答题</button>
+      <p class="tip mt center">密码请询问老师（默认 zqxx2025）</p>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="appBox" class="hidden">
+    <div class="nav" id="mainNav">
+      <button data-view="daily">📅 每日打卡</button>
+      <button data-view="practice">🎯 分类练习</button>
+      <button data-view="wrong">📕 错题本</button>
+      <button data-view="board">🏆 排行榜</button>
+    </div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/assets/student.js"></script>
+</body>
+</html>

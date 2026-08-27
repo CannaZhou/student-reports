@@ -1,0 +1,122 @@
+/* 阅读智能体：儿童友好样式 */
+:root {
+  --sky: #3b9dff;
+  --sky-light: #e6f3ff;
+  --purple: #7b5cff;
+  --purple-light: #f0ecff;
+  --orange: #ff9f43;
+  --orange-light: #fff3e4;
+  --green: #27ae60;
+  --green-light: #e6f7ec;
+  --pink: #ff6b9d;
+  --gold: #ffb800;
+}
+
+/* ---- 登录 ---- */
+.login-box .card { border-top: 5px solid var(--gold); }
+
+/* ---- 书架 ---- */
+.book-intro {
+  background: linear-gradient(135deg, var(--sky), var(--purple));
+  color: #fff; border-radius: 16px; padding: 22px; margin-bottom: 16px;
+}
+.book-intro h2 { color: #fff; margin-bottom: 6px; }
+.book-intro .map { margin-top: 12px; font-size: 14px; background: rgba(255,255,255,.18); border-radius: 10px; padding: 8px 12px; }
+.shelf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.chapter-card {
+  background: #fff; border-radius: 16px; padding: 18px; cursor: pointer;
+  box-shadow: 0 1px 5px rgba(30,60,90,.10); border: 2px solid transparent;
+  transition: transform .12s, border-color .12s; text-align: left;
+}
+.chapter-card:hover { transform: translateY(-2px); }
+.chapter-card .no-tag {
+  display: inline-block; width: 34px; height: 34px; line-height: 34px; text-align: center;
+  border-radius: 50%; background: var(--sky-light); color: var(--sky);
+  font-weight: 800; font-size: 15px; margin-bottom: 8px;
+}
+.chapter-card.locked .no-tag { background: #eef1f6; color: #aab; }
+.chapter-card .ct { font-size: 16px; font-weight: 700; color: var(--purple); margin-bottom: 4px; }
+.chapter-card .mtip { font-size: 13px; color: #888; }
+.chapter-card .tags { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---- 阅读页 ---- */
+.back-btn { background: #eef1f6; color: #556; margin-bottom: 12px; }
+.chapter-head { margin-bottom: 10px; }
+.chapter-head h2 { color: var(--purple); }
+.story-text { font-size: 17px; line-height: 2; color: #2b2b2b; }
+.story-text p { margin-bottom: 14px; }
+.knowledge-box {
+  background: var(--sky-light); border-left: 5px solid var(--sky);
+  border-radius: 10px; padding: 14px 16px; margin: 14px 0;
+}
+.knowledge-box h4 { color: var(--sky); margin-bottom: 8px; }
+.knowledge-box li { font-size: 15px; line-height: 1.9; margin-left: 18px; }
+.mnemonic-box {
+  background: var(--orange-light); border-left: 5px solid var(--orange);
+  border-radius: 10px; padding: 12px 16px; margin: 14px 0;
+  font-size: 15px; color: #8a5a00;
+}
+.kcard {
+  background: var(--purple-light); border-radius: 12px; padding: 12px 14px; margin: 10px 0;
+}
+.kcard h5 { color: var(--purple); margin-bottom: 4px; }
+.kcard p { font-size: 14px; color: #555; margin-bottom: 4px; }
+.kcard ul { margin-left: 16px; font-size: 14px; color: #555; line-height: 1.8; }
+
+.action-bar { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+.action-bar button { padding: 12px 22px; font-size: 15px; border-radius: 12px; }
+
+/* ---- 闯关 ---- */
+.quiz-options { margin: 8px 0; }
+.qnum-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px; height: 30px; padding: 0 6px; border-radius: 8px;
+  background: #e5f0fa; color: var(--sky); font-weight: 700; font-size: 14px; margin-right: 8px;
+}
+.fill-input { margin-top: 6px; }
+.result-item { border-left: 5px solid #ddd; padding: 10px 12px; margin: 10px 0; border-radius: 8px; }
+.result-item.ok { background: var(--green-light); border-left-color: var(--green); }
+.result-item.no { background: #fdeaea; border-left-color: #e74c3c; }
+.score-hero {
+  text-align: center; background: linear-gradient(135deg, var(--green), var(--sky));
+  color: #fff; border-radius: 16px; padding: 24px; margin-bottom: 14px;
+}
+.score-hero .num { font-size: 44px; font-weight: 900; }
+
+/* ---- 伴读对话 ---- */
+.chat-wrap { display: flex; flex-direction: column; height: 60vh; min-height: 420px; }
+.chat-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.chat-head select { width: 220px; }
+.chat-body {
+  flex: 1; overflow-y: auto; background: #f7fafd; border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.chat-msg { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
+.chat-msg.user { align-self: flex-end; background: var(--sky); color: #fff; border-bottom-right-radius: 4px; }
+.chat-msg.ai { align-self: flex-start; background: #fff; color: #2b2b2b; border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.chat-msg.ai .src-tag {
+  display: inline-block; font-size: 11px; color: var(--sky); background: var(--sky-light);
+  border-radius: 8px; padding: 1px 6px; margin-bottom: 4px;
+}
+.chat-msg.typing { color: #999; font-style: italic; }
+.chat-input { display: flex; gap: 8px; margin-top: 10px; }
+.chat-input input { flex: 1; }
+.chat-input button { white-space: nowrap; }
+
+/* ---- 存折 ---- */
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.stat-card { background: #fff; border-radius: 14px; padding: 16px; text-align: center; box-shadow: 0 1px 4px rgba(30,60,90,.08); }
+.stat-card .n { font-size: 28px; font-weight: 800; color: var(--purple); }
+.stat-card .l { font-size: 13px; color: #888; margin-top: 2px; }
+.badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.badge-card { border-radius: 14px; padding: 14px; text-align: center; border: 2px solid var(--line); }
+.badge-card.got { border-color: var(--gold); background: var(--orange-light); }
+.badge-card .em { font-size: 30px; }
+.badge-card .nm { font-weight: 700; margin-top: 4px; }
+.badge-card .ds { font-size: 12px; color: #888; }
+.badge-card.locked { opacity: .45; }
+
+/* ---- 排行榜 ---- */
+.board-rows td:first-child { font-weight: 700; }
+.rank-me td { background: var(--orange-light); }
+.podium em { font-style: normal; }

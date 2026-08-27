@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小AI探险队 · 知识阅读馆</title>
+<link rel="stylesheet" href="/assets/shared.css">
+<link rel="stylesheet" href="/assets/reading.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="container">
+    <h1>🚀 小AI探险队 · 知识阅读馆</h1>
+    <span class="who hidden" id="who"></span>
+    <button class="sm hidden" id="logoutBtn">退出</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 登录 -->
+  <div id="loginBox" class="login-box hidden">
+    <div class="card">
+      <h2 class="center">🌟 登录阅读馆</h2>
+      <p class="tip center">跟着小AI探险队，边读故事边学AI知识！</p>
+      <label>姓名</label>
+      <input id="loginName" placeholder="请输入你的名字">
+      <label>密码</label>
+      <input id="loginPw" type="password" placeholder="请输入密码">
+      <button class="mt" style="width:100%; padding:12px;" onclick="doLogin()">开始阅读</button>
+      <p class="tip mt center">密码请询问老师（默认 zqxx2025）</p>
+      <p class="tip mt center">想练题答题？去 <a href="/">AI知识竞赛答题</a></p>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="appBox" class="hidden">
+    <div class="nav" id="mainNav">
+      <button data-view="shelf">📚 我的书架</button>
+      <button data-view="companion">💬 AI伴读</button>
+      <button data-view="passbook">📕 阅读存折</button>
+      <button data-view="board">🏆 阅读之星</button>
+    </div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/assets/reading.js"></script>
+</body>
+</html>

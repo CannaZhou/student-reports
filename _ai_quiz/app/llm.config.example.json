@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "provider": "deepseek",
+  "apiKey": "sk-在这里填入你的DeepSeek API Key",
+  "baseUrl": "https://api.deepseek.com",
+  "model": "deepseek-chat",
+  "timeoutMs": 20000
+}

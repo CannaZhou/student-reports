@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>教师端 · AI知识竞赛答题系统</title>
+<link rel="stylesheet" href="/assets/shared.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="container">
+    <h1>👩‍🏫 AI知识竞赛 · 教师端</h1>
+    <span class="who hidden" id="who">教师</span>
+    <button class="sm hidden" id="logoutBtn">退出</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 登录 / 首次设置 -->
+  <div id="loginBox" class="login-box">
+    <div class="card" id="loginCard">
+      <h2 class="center">教师登录</h2>
+      <label>教师密码</label>
+      <input id="tpw" type="password" placeholder="请输入教师密码">
+      <button class="mt" style="width:100%; padding:12px;" id="loginBtn">登录</button>
+    </div>
+    <div class="card hidden" id="setupCard">
+      <h2 class="center">首次使用：设置教师密码</h2>
+      <label>设置密码（至少4位）</label>
+      <input id="npw" type="password" placeholder="请牢记此密码">
+      <button class="mt accent" style="width:100%; padding:12px;" id="setupBtn">设置并进入</button>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="appBox" class="hidden">
+    <div class="nav" id="mainNav">
+      <button data-view="overview">📊 总览</button>
+      <button data-view="reading">📖 阅读统计</button>
+      <button data-view="students">📋 学生名单</button>
+      <button data-view="questions">📚 题目管理</button>
+      <button data-view="detail">🔍 学生详情</button>
+      <button data-view="settings">⚙️ 设置</button>
+    </div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/assets/qrcode.min.js"></script>
+<script src="/assets/teacher.js"></script>
+</body>
+</html>
