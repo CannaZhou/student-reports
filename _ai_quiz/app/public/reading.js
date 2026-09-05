@@ -4,6 +4,8 @@ const view = $('#view');
 const state = { me: null, currentChapterNo: null };
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+// 聊天回复：先转义再渲染 Markdown 加粗（LLM 常用 **文字**）
+function fmt(s) { return esc(s).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>'); }
 
 async function api(method, path, body) {
   const res = await fetch(path, {
@@ -44,7 +46,7 @@ function setLoggedIn(name) {
   state.me = { name };
   $('#loginBox').classList.add('hidden');
   $('#appBox').classList.remove('hidden');
-  $('#who').textContent = '👋 ' + name;
+  $('#who').textContent = name;
   $('#who').classList.remove('hidden');
   $('#logoutBtn').classList.remove('hidden');
 }
@@ -260,6 +262,7 @@ async function renderCompanion() {
     let html = `<div class="chat-wrap"><div class="chat-head">
       <span>💬 和点点聊</span>
       <select id="chatChapter">${s.chapters.filter((c) => c.no <= s.unlocked).map((c) => `<option value="${c.no}" ${c.no === no ? 'selected' : ''}>${c.no}. ${esc(c.title)}</option>`).join('')}</select>
+      <button class="sm end" id="chatEnd">💤 结束对话</button>
     </div>
     <div class="chat-body" id="chatBody">
       <div class="chat-msg ai">嗨，我是守护精灵点点！读完故事了吗？有什么不懂的、好奇的AI小秘密，都可以问我哦～😊</div>
@@ -274,6 +277,27 @@ async function renderCompanion() {
     const input = $('#chatInput');
     const send = $('#chatSend');
     const sel = $('#chatChapter');
+    const endBtn = $('#chatEnd');
+
+    // 结束对话：礼貌道别，不再追问，停止输入
+    endBtn.addEventListener('click', () => {
+      input.disabled = true; send.disabled = true; endBtn.disabled = true;
+      body.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">今天和点点聊得真开心！💫 你随时想再来探索AI的秘密，都可以回到这里找我哦～拜拜！👋</div>`);
+      body.scrollTop = body.scrollHeight;
+    });
+
+    // 重新进入时恢复上次对话（视觉上上下文不丢）
+    try {
+      const h = await api('GET', '/api/reading/chat/history');
+      if (h.dialog && h.dialog.length) {
+        body.innerHTML = '';
+        body.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">嗨，我是点点，咱们接着上次聊吧～😊</div>`);
+        for (const m of h.dialog) {
+          body.insertAdjacentHTML('beforeend', `<div class="chat-msg ${m.role === 'user' ? 'user' : 'ai'}">${fmt(m.text)}</div>`);
+        }
+        body.scrollTop = body.scrollHeight;
+      }
+    } catch (e) {}
 
     const sendMsg = async () => {
       const text = input.value.trim();
@@ -288,7 +312,7 @@ async function renderCompanion() {
       body.scrollTop = body.scrollHeight;
       try {
         const rr = await api('POST', '/api/reading/chat', { chapterNo: Number(sel.value), question: text });
-        typing.outerHTML = `<div class="chat-msg ai"><div><span class="src-tag">${rr.source === 'llm' ? 'AI伴读' : '离线回答'}</span></div>${esc(rr.reply)}</div>`;
+        typing.outerHTML = `<div class="chat-msg ai"><div><span class="src-tag">${rr.source === 'llm' ? 'AI伴读' : '离线回答'}</span></div>${fmt(rr.reply)}</div>`;
       } catch (e) {
         typing.outerHTML = `<div class="chat-msg ai">${esc(e.message)}</div>`;
       }

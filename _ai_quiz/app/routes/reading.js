@@ -9,6 +9,17 @@ const {
   readBody, ok, fail, currentSession, publicQuestion,
 } = require('./helpers.js');
 
+// 兼容两种提交格式：前端用 {id: 答案} 对象，数组 [{id,answer}] 也支持
+function toAnswerMap(raw) {
+  const m = new Map();
+  if (Array.isArray(raw)) {
+    for (const it of raw) m.set(it.id, it.answer);
+  } else if (raw && typeof raw === 'object') {
+    for (const k of Object.keys(raw)) m.set(k, raw[k]);
+  }
+  return m;
+}
+
 function shelfInfo(p) {
   const r = ensureReading(p);
   return {
@@ -115,7 +126,6 @@ function register(router, ctx) {
     if (!ch) return fail(res, 400, '章节不存在');
     if (no > unlocked(a.p)) return fail(res, 403, '请先完成前面的冒险关卡');
     const cp = chapterProgress(a.p, no);
-    if (!cp.storyRead) return fail(res, 403, '请先读完本章故事，再来闯关');
 
     // 幂等：已完成的关卡直接返回既有记录
     if (cp.quizDone) {
@@ -127,8 +137,7 @@ function register(router, ctx) {
 
     const body = await readBody(req, 512 * 1024);
     const bankQs = ch.quizIds.map((id) => bank.getById(id)).filter(Boolean);
-    const ansMap = new Map();
-    for (const aItem of (body.answers || [])) ansMap.set(aItem.id, aItem.answer);
+    const ansMap = toAnswerMap(body.answers);
 
     const results = bankQs.map((q) => {
       const g = gradeQuestion(q, ansMap.get(q.id));
@@ -145,9 +154,11 @@ function register(router, ctx) {
     });
 
     await store.mutate(() => {
+      // 未点"我读完本章了"也能闯关：提交即自动记为已读（能完成闯关本身就是阅读与理解的体现）
+      if (!cp.storyRead) { cp.storyRead = true; cp.readAt = new Date().toISOString(); }
       cp.quizDone = true; cp.quizScore = correct; cp.quizTotal = total; cp.quizAt = new Date().toISOString();
       cp.quizAnswers = {};
-      for (const x of (body.answers || [])) cp.quizAnswers[x.id] = x.answer;
+      for (const [k, v] of toAnswerMap(body.answers)) cp.quizAnswers[k] = v;
       cp.quizResults = {};
       for (const r of results) cp.quizResults[r.id] = r.correct;
       cp.resultsList = resultsList;
@@ -171,7 +182,7 @@ function register(router, ctx) {
 
     const r = ensureReading(a.p);
     const cp = chapterProgress(a.p, no);
-    const history = (r.dialog || []).slice(-4).map((d) => ({ role: d.role, text: d.text }));
+    const history = (r.dialog || []).slice(-8).map((d) => ({ role: d.role, text: d.text }));
 
     const messages = llm.buildCompanionMessages({
       chapter: ch, question, history,
@@ -193,6 +204,17 @@ function register(router, ctx) {
       reply: result.reply, source: result.source,
       chapterNo: ch.no, chapterTitle: ch.chapterTitle,
       dialogCount: r.dialogCount,
+    });
+  });
+
+  // ---------- 聊天历史（供前端重新进入伴读时恢复上下文） ----------
+  router.add('GET', '/api/reading/chat/history', async (req, res) => {
+    const a = auth(req, res);
+    if (!a) return;
+    const r = ensureReading(a.p);
+    ok(res, {
+      dialog: (r.dialog || []).slice(-12).map((d) => ({ role: d.role, text: d.text })),
+      dialogCount: r.dialogCount || 0,
     });
   });
 

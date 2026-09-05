@@ -23,6 +23,9 @@ const { Store } = require(path.join(APP, 'core', 'store.js'));
 const sessions = require(path.join(APP, 'core', 'sessions.js'));
 const bank = require(path.join(APP, 'core', 'bank.js'));
 const { hashPassword } = require(path.join(APP, 'core', 'auth.js'));
+const llm = require(path.join(APP, 'core', 'llm.js'));
+// 冒烟隔离：替换 chat，不读真实 llm.config.json、不真实调用大模型，确定性地走本地兜底
+llm.chat = ({ fallbackText }) => Promise.resolve({ reply: fallbackText, source: 'local' });
 const { createRouter } = require(path.join(APP, 'routes', 'router.js'));
 const studentRoutes = require(path.join(APP, 'routes', 'student.js'));
 const teacherRoutes = require(path.join(APP, 'routes', 'teacher.js'));
@@ -125,11 +128,9 @@ function check(name, cond, extra) {
   r = await request('GET', '/api/reading/chapter/1', null, cookie);
   check('第1章阅读内容OK', r.status === 200 && r.j.story.length > 0 && r.j.knowledge.length > 0);
 
-  // 5. 未读故事直接闯关 → 403
+  // 5. 未读故事也能获取闯关题（读故事不再强制拦截，提交时自动记为已读）
   r = await request('GET', '/api/reading/quiz/1', null, cookie);
-  check('读取第2章被锁（需先完成第1章）', r.status === 200); // 第1章可读题
-  r = await request('POST', '/api/reading/quiz/1/submit', { answers: [] }, cookie);
-  check('未读故事不能闯关 → 403', r.status === 403);
+  check('第1章闯关题可获取', r.status === 200);
 
   // 6. 标记读完第1章
   r = await request('POST', '/api/reading/chapter/1/read', {}, cookie);
@@ -140,13 +141,14 @@ function check(name, cond, extra) {
   check('AI伴读有回复（本地兜底）', r.status === 200 && r.j.reply && r.j.reply.length > 0);
   check('AI伴读标注离线来源', r.j.source === 'local');
 
-  // 8. 取第1章闯关题并答对全部（答案从题库获取）
+  // 8. 取第1章闯关题并答对全部（用前端真实格式：对象 {id:答案}）
   r = await request('GET', '/api/reading/quiz/1', null, cookie);
   check('第1章闯关题获取OK', r.status === 200 && r.j.questions.length > 0);
-  const answers = r.j.questions.map((q) => ({ id: q.id, answer: bank.getById(q.id).answer }));
+  const answers = {};
+  for (const q of r.j.questions) answers[q.id] = bank.getById(q.id).answer;
   r = await request('POST', '/api/reading/quiz/1/submit', { answers }, cookie);
   check('闯关提交成功', r.status === 200 && r.j.done === true);
-  check('全对得满分', r.j.quizScore === r.j.quizTotal && r.j.quizScore === answers.length, r.j);
+  check('全对得满分', r.j.quizScore === r.j.quizTotal && r.j.quizScore === Object.keys(answers).length, r.j);
   check('获得积分', r.j.points > 0);
 
   // 9. 重复提交 → 幂等回放
@@ -156,6 +158,21 @@ function check(name, cond, extra) {
   // 10. 第2章解锁
   r = await request('GET', '/api/reading/shelf', null, cookie);
   check('第2章已解锁', r.j.shelf.unlocked === 2);
+
+  // 10.5 未标记"读完"也能闯关：提交自动记为已读（修复"读过仍被拦"问题）
+  r = await request('GET', '/api/reading/quiz/2', null, cookie);
+  check('第2章闯关题可获取', r.status === 200 && r.j.questions.length > 0);
+  const answers2 = r.j.questions.map((q) => ({ id: q.id, answer: bank.getById(q.id).answer }));
+  r = await request('POST', '/api/reading/quiz/2/submit', { answers: answers2 }, cookie);
+  check('未标记读完也能闯关成功', r.status === 200 && r.j.done === true);
+  check('第2章全对', r.j.quizScore === r.j.quizTotal);
+  r = await request('GET', '/api/reading/shelf', null, cookie);
+  const ch2info = r.j.shelf.chapters.find((c) => c.no === 2);
+  check('第2章已被自动标记为已读', ch2info && ch2info.storyRead === true);
+
+  // 10.6 聊天历史接口可用（前端恢复上下文用）
+  r = await request('GET', '/api/reading/chat/history', null, cookie);
+  check('聊天历史接口可用', r.status === 200 && Array.isArray(r.j.dialog));
 
   // 11. 存折
   r = await request('GET', '/api/reading/passbook', null, cookie);
