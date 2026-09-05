@@ -1,7 +1,7 @@
 /* 阅读智能体：儿童友好样式 */
 :root {
-  --sky: #3b9dff;
-  --sky-light: #e6f3ff;
+  --sky: #3A7D44;
+  --sky-light: #e7f3e9;
   --purple: #7b5cff;
   --purple-light: #f0ecff;
   --orange: #ff9f43;
@@ -71,7 +71,7 @@
 .qnum-badge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 30px; height: 30px; padding: 0 6px; border-radius: 8px;
-  background: #e5f0fa; color: var(--sky); font-weight: 700; font-size: 14px; margin-right: 8px;
+  background: #e5f0e4; color: var(--sky); font-weight: 700; font-size: 14px; margin-right: 8px;
 }
 .fill-input { margin-top: 6px; }
 .result-item { border-left: 5px solid #ddd; padding: 10px 12px; margin: 10px 0; border-radius: 8px; }
@@ -85,10 +85,11 @@
 
 /* ---- 伴读对话 ---- */
 .chat-wrap { display: flex; flex-direction: column; height: 60vh; min-height: 420px; }
-.chat-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.chat-head select { width: 220px; }
+.chat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.chat-head select { width: 220px; max-width: 60%; }
+.chat-head .end { margin-left: auto; }
 .chat-body {
-  flex: 1; overflow-y: auto; background: #f7fafd; border: 1px solid var(--line);
+  flex: 1; overflow-y: auto; background: #f5faf3; border: 1px solid var(--line);
   border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px;
 }
 .chat-msg { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
@@ -100,8 +101,11 @@
 }
 .chat-msg.typing { color: #999; font-style: italic; }
 .chat-input { display: flex; gap: 8px; margin-top: 10px; }
-.chat-input input { flex: 1; }
-.chat-input button { white-space: nowrap; }
+.chat-input input { flex: 1; min-height: 48px; font-size: 16px; padding: 0 14px; }
+.chat-input button { white-space: nowrap; min-height: 48px; }
+@media (max-width: 480px) {
+  .chat-head select { flex: 1 1 100%; max-width: 100%; }
+}
 
 /* ---- 存折 ---- */
 .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }

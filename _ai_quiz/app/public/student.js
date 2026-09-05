@@ -34,7 +34,7 @@ function setLoggedIn(me) {
   state.me = me;
   $('#loginBox').classList.add('hidden');
   $('#appBox').classList.remove('hidden');
-  $('#who').textContent = '👋 ' + me.name;
+  $('#who').textContent = me.name;
   $('#who').classList.remove('hidden');
   $('#logoutBtn').classList.remove('hidden');
 }
@@ -332,7 +332,7 @@ async function renderBoard() {
     const medal = ['🥇', '🥈', '🥉'];
     r.list.forEach((row) => {
       const mine = r.me && row.name === r.me.name;
-      html += `<tr style="${mine ? 'background:#eef5fc; font-weight:600;' : ''}">
+      html += `<tr style="${mine ? 'background:#edf5eb; font-weight:600;' : ''}">
         <td>${medal[row.rank - 1] || row.rank}</td>
         <td>${esc(row.name)}${mine ? '（我）' : ''}</td>
         <td>${row.doneDays} 天</td><td>${row.totalScore}</td><td>${row.avg}</td></tr>`;

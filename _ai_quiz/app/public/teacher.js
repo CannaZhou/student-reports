@@ -113,17 +113,15 @@ async function loadReading() {
 }
 
 // ---------------- 总览 ----------------
-function publicPanelHtml(savedUrl) {
+// 固定公网域名（2026-08-28 起固定，不再随隧道变化）
+const PUB_URL = 'https://ai.aizqxx.top';
+function publicPanelHtml() {
   return `<div class="card"><div class="row">
-    <h3 class="grow">📡 公网访问 · 学生二维码</h3>
-    <button class="sm secondary" data-qr-copy>复制链接</button>
+    <h3 class="grow">📡 公网访问 · 学生链接</h3>
+    <button class="sm secondary" data-copy-pub>复制链接</button>
   </div>
-  <p class="tip">学生在家也能做：先在教师电脑上启动隧道（cloudflared 一行命令），把生成的 <b>https://…trycloudflare.com</b> 地址粘贴到下面，即可生成二维码。学生用<b>手机相机扫码</b>进入（不要在微信里直接点，会被拦截）。</p>
-  <div class="row">
-    <input id="pubUrl" class="grow" placeholder="https://xxxx.trycloudflare.com" value="${esc(savedUrl)}">
-    <button id="qrGen" class="accent">生成二维码</button>
-  </div>
-  <div id="qrBox" class="mt" style="text-align:center;"></div>
+  <p class="tip">学生访问地址固定如下（教师电脑需保持开机并已启动隧道）。学生用<b>手机相机扫码</b>或<b>复制链接到浏览器打开</b>即可进入（不要在微信里直接点，会被拦截）。</p>
+  <p class="mono" style="font-size:17px;font-weight:600;color:var(--primary-dark);word-break:break-all;">${PUB_URL}</p>
   </div>`;
 }
 
@@ -133,7 +131,7 @@ async function loadOverview() {
     const r = await api('GET', '/api/teacher/overview');
     const byType = r.bank.byType;
     const typeHtml = Object.keys(byType).map((t) => `${TYPE_NAME[t] || t} ${byType[t]}`).join(' · ');
-    let html = publicPanelHtml(localStorage.getItem('pubUrl') || '');
+    let html = publicPanelHtml();
     html += `<div class="card"><div class="row">
       <h3 class="grow">📊 班级答题总览</h3>
       <span class="badge info">题库共 ${r.bank.total} 题（${typeHtml}）</span>
@@ -154,29 +152,10 @@ async function loadOverview() {
     }
     view.innerHTML = html;
 
-    // 公网二维码：粘贴地址 → 生成二维码
-    const gen = view.querySelector('#qrGen');
-    const pubInput = view.querySelector('#pubUrl');
-    if (gen && pubInput) {
-      const genQr = () => {
-        const url = pubInput.value.trim();
-        if (!url) return toast('请先粘贴公网地址');
-        localStorage.setItem('pubUrl', url);
-        const box = view.querySelector('#qrBox');
-        box.innerHTML = '';
-        if (typeof QRCode === 'undefined') return toast('二维码库未加载，请刷新页面');
-        new QRCode(box, { text: url, width: 230, height: 230 });
-        box.innerHTML += `<p class="tip mt">学生用<b>手机相机</b>扫码，或长按二维码图片保存后发送到班级群</p>`;
-      };
-      gen.addEventListener('click', genQr);
-      pubInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') genQr(); });
-      if (pubInput.value.trim()) genQr();
-    }
-    const copyBtn = view.querySelector('[data-qr-copy]');
+    // 公网链接：一键复制固定地址
+    const copyBtn = view.querySelector('[data-copy-pub]');
     if (copyBtn) copyBtn.addEventListener('click', () => {
-      const url = pubInput.value.trim();
-      if (!url) return toast('请先粘贴公网地址');
-      navigator.clipboard && navigator.clipboard.writeText(url).then(() => toast('链接已复制'));
+      navigator.clipboard && navigator.clipboard.writeText(PUB_URL).then(() => toast('链接已复制，发送到班级群即可'));
     });
   } catch (e) { view.innerHTML = `<p class="tip">${esc(e.message)}</p>`; }
 }
