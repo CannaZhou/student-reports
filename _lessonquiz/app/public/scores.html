@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的成绩 · 信息科技</title>
+<link rel="stylesheet" href="styles.css?v=8">
+</head>
+<body>
+<header class="topbar">
+  <div class="crest">科</div>
+  <div class="tt">我的成绩<small>逐课记录 · 越练越好</small></div>
+  <div class="sp"></div>
+  <a class="btn" href="index" style="text-decoration:none">首页</a>
+</header>
+<div class="wrap">
+  <div id="loginCard" class="card" hidden>
+    <div class="panel-title">
+      <h1>👋 先选你的名字</h1>
+      <p class="muted">还没有登录，输入姓名即可查看自己的成绩。</p>
+    </div>
+    <div style="max-width:360px;margin:12px auto 0">
+      <label class="f" for="sName">你的姓名</label>
+      <input class="input" id="sName" placeholder="请输入姓名" autocomplete="off">
+      <div id="sCls" hidden style="margin-top:10px">
+        <label class="f">同名同学，选你的班级</label>
+        <div id="sClsOpts" style="display:grid;gap:8px"></div>
+      </div>
+      <button class="btn big" id="sGo" style="margin-top:14px">查看成绩 →</button>
+      <p class="muted" id="sErr" style="color:#e03131;min-height:20px"></p>
+    </div>
+  </div>
+
+  <div id="scoresBody" hidden></div>
+</div>
+<script src="scores.js?v=8"></script>
+</body>
+</html>

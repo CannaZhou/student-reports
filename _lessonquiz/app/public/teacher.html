@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>教师管理 · 信息科技</title>
+<link rel="stylesheet" href="styles.css?v=10">
+</head>
+<body>
+<header class="topbar">
+  <div class="crest">科</div>
+  <div class="tt">教师管理<small>名单 · 各课完成情况</small></div>
+  <div class="sp"></div>
+  <button class="btn" id="logoutBtn" hidden>退出</button>
+  <a class="btn" href="index" style="text-decoration:none">首页</a>
+</header>
+<div class="wrap">
+
+  <!-- 教师登录 -->
+  <section id="login" class="card" hidden>
+    <div class="panel-title"><h1>🔑 教师登录</h1><p class="muted">初始密码为 <b>123456</b>，登录后请尽快修改。</p></div>
+    <div style="max-width:320px;margin:12px auto 0">
+      <label class="f" for="pw">教师密码</label>
+      <input class="input" id="pw" type="password" placeholder="请输入密码">
+      <button class="btn big" id="loginGo" style="margin-top:14px">进入管理 →</button>
+      <p class="muted" id="loginErr" style="color:#e03131;min-height:20px"></p>
+    </div>
+  </section>
+
+  <!-- 管理主区 -->
+  <section id="admin" hidden>
+    <div class="card">
+      <div class="tabs" style="margin:0">
+        <div class="tab" data-tab="roster">📇 学生名单</div>
+        <div class="tab" data-tab="overview">📈 各课完成情况</div>
+        <div class="tab" data-tab="summary">🗂 期末汇总</div>
+        <div class="tab" data-tab="pass">🔐 修改密码</div>
+      </div>
+    </div>
+    <div id="tabBody"></div>
+  </section>
+
+</div>
+<script src="teacher.js?v=11"></script>
+</body>
+</html>

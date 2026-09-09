@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>课堂答题 · 信息科技</title>
+<link rel="stylesheet" href="styles.css?v=10">
+</head>
+<body>
+<header class="topbar">
+  <div class="crest">科</div>
+  <div class="tt">课堂答题<small id="topSub"></small></div>
+  <div class="sp"></div>
+  <div class="who" id="whoBox" hidden></div>
+  <button class="btn" id="logoutBtn" hidden>退出</button>
+  <a class="btn" href="index" style="text-decoration:none">首页</a>
+</header>
+
+<div class="wrap">
+
+  <!-- 视图：登录 -->
+  <section id="view-login" class="card" hidden>
+    <div class="panel-title">
+      <h1>👋 先选你的名字</h1>
+      <p class="muted">名单由老师提前录好；选到同名同学时再选一下班级。</p>
+    </div>
+    <div style="max-width:360px;margin:14px auto 0">
+      <label class="f" for="loginName">你的姓名</label>
+      <input class="input" id="loginName" placeholder="请输入姓名" autocomplete="off">
+      <div id="clsBox" hidden style="margin-top:10px">
+        <label class="f">同名同学，选你的班级</label>
+        <div id="clsOpts" style="display:grid;gap:8px"></div>
+      </div>
+      <button class="btn big" id="loginGo" style="margin-top:16px">进入课程地图 →</button>
+      <p class="muted" id="loginErr" style="color:#e03131;min-height:20px"></p>
+    </div>
+  </section>
+
+  <!-- 视图：课程地图 -->
+  <section id="view-map" hidden>
+    <div id="mapHeader"></div>
+    <div class="card">
+      <div class="tabs" id="gradeTabs"></div>
+      <div id="mapBody"><div class="empty-note">加载中…</div></div>
+    </div>
+  </section>
+
+  <!-- 视图：答题 -->
+  <section id="view-quiz" hidden>
+    <div class="card" id="quizHeader"></div>
+    <div id="quizBody"></div>
+    <div class="submit-bar"><div class="inner">
+      <div class="done-note" id="submitNote" style="flex:1"></div>
+      <button class="btn" id="submitBtn">交卷批改</button>
+    </div></div>
+  </section>
+
+  <!-- 视图：课内任务单（开放填写，不判分，可反复保存） -->
+  <section id="view-sheet" hidden>
+    <div class="card" id="sheetHeader"></div>
+    <div id="sheetBody"></div>
+    <div class="submit-bar"><div class="inner">
+      <div class="done-note" id="sheetNote" style="flex:1"></div>
+      <button class="btn" id="sheetSaveBtn">保存任务单</button>
+    </div></div>
+  </section>
+
+  <!-- 视图：结果 -->
+  <section id="view-result" hidden>
+    <div id="resultBody"></div>
+  </section>
+
+</div>
+
+<script src="flowchart.js?v=10"></script>
+<script src="quiz.js?v=10"></script>
+</body>
+</html>
