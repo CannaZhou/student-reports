@@ -24,7 +24,7 @@
 
     const headCard = el('div', 'card');
     headCard.appendChild(el('h1', 'screen', '📊 我的积分'));
-    headCard.appendChild(el('div', 'muted', '每一课的答题情况（每题整题答对得 1 积分，最高积分 / 最近一次 / 次数 / 历次积分）。'));
+    headCard.appendChild(el('div', 'muted', '每一课的答题情况（每题整题答对得 1 积分）。若老师评过课内任务单，末尾列会显示老师评分（满分 10）。'));
     body.appendChild(headCard);
 
     const rowsCard = el('div', 'card');
@@ -39,7 +39,7 @@
       } else {
         const t = el('table', 'tbl');
         const tr = el('tr');
-        ['课程', '最高积分', '最近一次', '次数', '历次积分'].forEach((h) => tr.appendChild(el('th', null, h)));
+        ['课程', '最高积分', '最近一次', '次数', '历次积分', '任务单评分'].forEach((h) => tr.appendChild(el('th', null, h)));
         t.appendChild(tr);
         j.rows.forEach((r) => {
           const row = el('tr');
@@ -54,6 +54,18 @@
           });
           if (!(r.recent || []).length) hd.appendChild(document.createTextNode('—'));
           row.appendChild(hd);
+          // 任务单老师评分：评过显 数字/10；交过未评显 待评分；无任务单/没交显 —
+          const tk = el('td', null);
+          if (r.hasSheet) {
+            if (r.task != null) {
+              const b = el('b', null, String(r.task) + ' / 10');
+              if (r.taskAt) b.title = '评于 ' + new Date(r.taskAt).toLocaleString('zh-CN');
+              tk.appendChild(b);
+            } else if (r.sheetSubmitted) {
+              tk.appendChild(el('span', 'muted', '待老师评分'));
+            } else tk.appendChild(document.createTextNode('—'));
+          } else tk.appendChild(document.createTextNode('—'));
+          row.appendChild(tk);
           t.appendChild(row);
         });
         rowsCard.appendChild(t);

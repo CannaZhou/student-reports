@@ -204,23 +204,46 @@ function register(router, { store, config }) {
     ok(res, { savedAt, rows });
   });
 
-  // 本人成绩（各课历次）
+  // 本人成绩：按本年级课序一行一课，各含 小测积分 与 任务单老师评分(0–10)
   router.add('GET', '/api/student/scores', (req, res) => {
     const stu = studentOf(readSession(req, config), store);
     if (!stu) return fail(res, 401, '未登录');
     const p = store.progress[stu.uid];
+
+    // 该生年级的全部课（内容顺序）
+    const gradeObj = store.allSemesters().find((x) => x.grade === stu.grade);
+    const lessons = [];
+    if (gradeObj) {
+      for (const u of gradeObj.units || []) for (const l of u.lessons || []) lessons.push(l);
+    }
+    // 兜底：年级取不到（如未分班）→ 按本人有记录的课来
+    if (!lessons.length && p) {
+      const seen = {};
+      for (const lid of Object.keys(p.lessons || {})) { const l = store.findLesson(lid); if (l && !seen[lid]) { seen[lid] = 1; lessons.push(l); } }
+      for (const lid of Object.keys(p.marks || {})) { const l = store.findLesson(lid); if (l && !seen[lid]) { seen[lid] = 1; lessons.push(l); } }
+    }
+
     const rows = [];
-    if (p && p.lessons) {
-      for (const lid of Object.keys(p.lessons)) {
-        const lesson = store.findLesson(lid);
-        const st = p.lessons[lid];
-        rows.push({
-          lessonId: lid,
-          title: lesson ? lesson.title : lid,
-          best: st.best, lastScore: st.lastScore, attempts: st.attempts.length,
-          recent: st.attempts.slice(-8).reverse().map((a) => ({ at: a.at, score: a.score, full: a.full })),
-        });
-      }
+    for (const l of lessons) {
+      const lid = l.id;
+      const st = p && p.lessons && p.lessons[lid];
+      const m = p && p.marks && p.marks[lid];
+      const sh = p && p.sheets && p.sheets[lid];
+      const marked = m && typeof m.score === 'number';           // 老师评过分（0 也算评过）
+      const submitted = !!(sh && (sh.attempts || []).length);    // 交过任务单
+      if (!st && !marked && !submitted) continue;                // 没答没评 → 不占行
+      rows.push({
+        lessonId: lid,
+        title: l.title,
+        hasSheet: !!l.sheet,
+        best: st && typeof st.best === 'number' ? st.best : null,
+        lastScore: st && typeof st.lastScore === 'number' ? st.lastScore : null,
+        attempts: st ? (st.attempts || []).length : 0,
+        recent: st ? st.attempts.slice(-8).reverse().map((a) => ({ at: a.at, score: a.score, full: a.full })) : [],
+        task: marked ? m.score : null,                           // 未评为 null（与给了 0 区分）
+        taskAt: marked ? (m.at || null) : null,
+        sheetSubmitted: submitted,
+      });
     }
     ok(res, { rows, name: stu.name, className: stu.className });
   });
