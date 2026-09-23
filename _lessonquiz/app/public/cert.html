@@ -3,21 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>我的成绩 · 信息科技</title>
+<title>我的证书 · 信息科技</title>
 <link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
-<header class="topbar">
+<header class="topbar no-print">
   <div class="crest">科</div>
-  <div class="tt">我的成绩<small>逐课记录 · 越练越好</small></div>
+  <div class="tt">我的证书<small>一课一证 · 综合评价</small></div>
   <div class="sp"></div>
+  <div class="who" id="whoBox" hidden></div>
+  <button class="btn" id="logoutBtn" hidden>退出</button>
   <a class="btn" href="/" style="text-decoration:none">首页</a>
 </header>
+
 <div class="wrap">
-  <div id="loginCard" class="card" hidden>
+
+  <!-- 视图：登录 -->
+  <section id="view-login" class="card no-print" hidden>
     <div class="panel-title">
       <h1>👋 先选你的名字</h1>
-      <p class="muted">还没有登录，输入姓名即可查看自己的成绩。</p>
+      <p class="muted">做完一课的任务就会颁发这一课的证书，输入姓名即可查看。</p>
     </div>
     <div style="max-width:360px;margin:12px auto 0">
       <label class="f" for="sName">你的姓名</label>
@@ -26,13 +31,22 @@
         <label class="f">同名同学，选你的班级</label>
         <div id="sClsOpts" style="display:grid;gap:8px"></div>
       </div>
-      <button class="btn big" id="sGo" style="margin-top:14px">查看成绩 →</button>
+      <button class="btn big" id="sGo" style="margin-top:14px">查看我的证书 →</button>
       <p class="muted" id="sErr" style="color:#e03131;min-height:20px"></p>
     </div>
-  </div>
+  </section>
 
-  <div id="scoresBody" hidden></div>
+  <!-- 视图：证书墙 -->
+  <section id="view-wall" hidden>
+    <div id="wallBody"></div>
+  </section>
+
+  <!-- 视图：单课证书 -->
+  <section id="view-one" hidden>
+    <div id="oneBody"></div>
+  </section>
+
 </div>
-<script src="scores.js?v=10"></script>
+<script src="cert.js?v=1"></script>
 </body>
 </html>

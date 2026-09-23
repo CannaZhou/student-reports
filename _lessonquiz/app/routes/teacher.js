@@ -4,7 +4,7 @@ const {
 } = require('./helpers.js');
 const sessions = require('../core/sessions.js');
 const { verifyPassword, hashPassword } = require('../core/passwd.js');
-const { publicSheet } = require('../core/catalog.js');
+const { lessonName, publicSheet } = require('../core/catalog.js');
 
 function isTeacher(sess) { return !!(sess && sess.role === 'teacher'); }
 function requireTeacher(req, res, config) {
@@ -179,7 +179,7 @@ function register(router, { store, config }) {
           }
           const num = (l.questions || []).length; // 满分=题数（每题1积分）
           list.push({
-            lessonId: l.id, title: l.title, grade: g.grade, semester: g.semester, full: num, num,
+            lessonId: l.id, title: lessonName(l), grade: g.grade, semester: g.semester, full: num, num,
             hasSheet: !!l.sheet,
             doneCount, attempts, avgBest: any ? Math.round((sumBest / doneCount) * 10) / 10 : null,
             sheetDone,
@@ -203,7 +203,7 @@ function register(router, { store, config }) {
         attempts: st ? (st.attempts || []).length : 0,
       };
     });
-    ok(res, { lesson: { id: lesson.id, title: lesson.title, full: (lesson.questions || []).length, grade: gradeOfLesson(store, params.id) }, rows });
+    ok(res, { lesson: { id: lesson.id, title: lessonName(lesson), full: (lesson.questions || []).length, grade: gradeOfLesson(store, params.id) }, rows });
   });
 
   // 某课「课内任务单」赋分台：按班看整班学生（含未交），每人带【本课小测分】【全学期累计分】，可评 0–10
@@ -243,7 +243,7 @@ function register(router, { store, config }) {
     const sub = students.filter((r) => r.submitted).sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
     const nsub = students.filter((r) => !r.submitted).sort((a, b) => a.name.localeCompare(b.name, 'zh'));
     ok(res, {
-      lesson: { id: lesson.id, title: lesson.title, grade: lessonGrade, full },
+      lesson: { id: lesson.id, title: lessonName(lesson), grade: lessonGrade, full },
       sheet: publicSheet(lesson.sheet),
       classes: classes.map((c) => ({ name: c.name, count: c.count })),
       clsName,
@@ -321,7 +321,7 @@ function register(router, { store, config }) {
       clsName,
       classes: classes.map((c) => ({ name: c.name, count: c.count, grade: c.grade })),
       grade,
-      lessons: lessons.map((l) => ({ id: l.id, title: l.title, hasSheet: !!l.sheet, full: (l.questions || []).length })),
+      lessons: lessons.map((l) => ({ id: l.id, title: lessonName(l), hasSheet: !!l.sheet, full: (l.questions || []).length })),
       students,
       stats: { count: students.length, avg, maxT, hasAny: scored.length > 0 },
     });
@@ -344,7 +344,7 @@ function register(router, { store, config }) {
     }).filter(Boolean)
       .sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
     ok(res, {
-      lesson: { id: lesson.id, title: lesson.title },
+      lesson: { id: lesson.id, title: lessonName(lesson) },
       sheet: publicSheet(lesson.sheet),
       rows,
     });
@@ -364,6 +364,8 @@ function register(router, { store, config }) {
         } else if (p.lessons) {
           delete p.lessons[body.lessonId]; store.saveProgress(uid);
         }
+        // 重置掉这一课后不再满足发证条件 → 证书一并收回（补做后重新发证、重新计时）
+        if (p.certs && p.certs[body.lessonId]) { delete p.certs[body.lessonId]; store.saveProgress(uid); }
       } else if (uid) {
         store.deleteProgress(uid); // 清全部（含任务单记录）
       }

@@ -126,6 +126,12 @@ class Store {
     if (!s || !Array.isArray(s.attempts) || !s.attempts.length) return [];
     return s.attempts[s.attempts.length - 1].rows || [];
   }
+  // 某生某课「证书颁发」记录（p.certs[lessonId]={firstAt,lastAt,pct,stars}；老文件无该键 → null）
+  certStat(uid, lessonId) {
+    const p = this.progress[uid];
+    if (!p || !p.certs || !p.certs[lessonId]) return null;
+    return p.certs[lessonId];
+  }
   // 某生某课「任务单教师评分」记录（教师评 0–10 整数，存于 p.marks；老文件无该键 → null）
   markStat(uid, lessonId) {
     const p = this.progress[uid];

@@ -39,7 +39,7 @@
       } else {
         const t = el('table', 'tbl');
         const tr = el('tr');
-        ['课程', '最高积分', '最近一次', '次数', '历次积分', '任务单评分'].forEach((h) => tr.appendChild(el('th', null, h)));
+        ['课程', '最高积分', '最近一次', '次数', '历次积分', '任务单评分', '证书'].forEach((h) => tr.appendChild(el('th', null, h)));
         t.appendChild(tr);
         j.rows.forEach((r) => {
           const row = el('tr');
@@ -66,9 +66,22 @@
             } else tk.appendChild(document.createTextNode('—'));
           } else tk.appendChild(document.createTextNode('—'));
           row.appendChild(tk);
+          // 证书：已发证 → 星级可点进证书；还没做完 → 灰字提示
+          const ck = el('td');
+          if (r.cert && r.cert.issued) {
+            const a = el('a', null, '🎖️ ' + r.cert.stars.toFixed(1) + ' 星');
+            a.href = 'cert?lesson=' + encodeURIComponent(r.lessonId);
+            if (r.cert.pending) a.title = '课内任务单待老师批阅，批完综合评价会自动更新';
+            ck.appendChild(a);
+          } else {
+            ck.appendChild(el('span', 'muted', '未完成'));
+          }
+          row.appendChild(ck);
           t.appendChild(row);
         });
-        rowsCard.appendChild(t);
+        const sc = el('div', 'tbl-scroll'); // 7 列，窄屏让它自己横滑，别把页面顶破
+        sc.appendChild(t);
+        rowsCard.appendChild(sc);
       }
     } catch (err) {
       if (err.status === 401) { $('loginCard').hidden = false; body.hidden = true; return; }

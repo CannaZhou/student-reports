@@ -54,6 +54,37 @@ a { color: var(--green); text-decoration: none; }
 .topbar .btn:hover { background: rgba(255,255,255,.15); }
 
 .wrap { max-width: 880px; margin: 0 auto; padding: 14px 12px 60px; }
+/* 任务单页左侧多一列名单，整页放宽（其余页面仍 880 单列，窄屏时收回 880） */
+.wrap.wide { max-width: 1160px; }
+
+/* 任务单页 = 左名单栏 + 右正文 */
+.sheet-layout { display: flex; gap: 14px; align-items: flex-start; }
+.sheet-main { flex: 1 1 auto; min-width: 0; }
+.sheet-side { flex: 0 0 176px; position: sticky; top: 72px; }
+.side-card { padding: 12px 10px; }
+.side-cls { font-size: 15px; font-weight: 800; color: var(--green-dk); text-align: center; }
+.side-hint { font-size: 11.5px; color: var(--ink-2); line-height: 1.9; margin-top: 6px; }
+.side-count { font-size: 12px; font-weight: 700; color: var(--green); margin: 6px 0 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.mate-list { list-style: none; margin: 0; padding: 0; max-height: calc(100vh - 300px); overflow-y: auto; }
+.mate { display: flex; align-items: center; gap: 6px; padding: 2.5px 4px; border-radius: 6px; font-size: 13px; }
+.mate.me { background: var(--green-lt); font-weight: 800; color: var(--green-dk); }
+.mate-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mate-me { font-size: 10px; font-weight: 700; color: #fff; background: var(--green); border-radius: 8px; padding: 0 5px; }
+.dot { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+.dot-no { background: var(--bad); }
+.dot-yes { background: var(--ok); }
+.mate.todo .mate-name { color: var(--bad); }
+.mate.done .mate-name { color: var(--green-dk); }
+/* 窄屏（平板竖屏 / 小窗）：左栏收到正文上方，整页也收回原来的 880 */
+@media (max-width: 900px) {
+  .wrap.wide { max-width: 880px; }
+  /* 竖排时必须 stretch：还留 flex-start 的话，正文会按「内容有多宽就多宽」撑开，
+     36 列的枚举表（min-width 2214px）会把整页顶到 2260px、全页横向滚动。 */
+  .sheet-layout { flex-direction: column; align-items: stretch; }
+  .sheet-side { position: static; flex: none; width: 100%; }
+  .side-card { margin-bottom: 12px; }
+  .mate-list { max-height: 168px; }
+}
 
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
@@ -151,8 +182,60 @@ label.f { display: block; margin: 12px 0 4px; font-size: 14px; color: var(--ink-
 table.sheet-table { margin-top: 6px; }
 .sheet-table td { vertical-align: top; }
 .sheet-table td input.sheet-cell { width: 100%; box-sizing: border-box; }
+/* center:true 的任务单（如空白抽象表）——学生填的字也居中，整张表像格子纸 */
+.sheet-table.sheet-center td { text-align: center; }
+.sheet-table.sheet-center td input.sheet-cell { text-align: center; }
 .sheet-table tbody tr.sheet-example td { color: var(--ink-2); background: #f4f7f2; font-size: 13px; }
+/* 题图（教材原图） */
+.sheet-figure { margin: 6px 0 4px; text-align: center; }
+.sheet-figure img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }
+.sheet-figure-cap { font-size: 12.5px; color: var(--ink-2); margin-top: 4px; }
+/* 任务单里的程序（第4课起：鸡兔同笼.py）。white-space:pre 保住换行和缩进，
+   长行只在代码块内部横滑，不撑破整页。 */
+.sheet-code {
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 13px; line-height: 1.7; color: #1f2937;
+  background: #f7f8f7; border: 1px solid var(--line); border-left: 4px solid var(--green);
+  border-radius: 8px; padding: 10px 12px; margin: 8px 0 10px;
+  white-space: pre; overflow-x: auto;
+}
+/* 题目已印好、不用学生抄的格子（preset，如「头 35、脚 94」）：置灰 */
+.sheet-table td.sheet-pre .sheet-cell { background: #f1f3f4; color: var(--ink-2); font-weight: 600; }
+/* 行标签（对象列印好“鸡/兔”，不可改）与已知行（合计行 35/35/94） */
+.sheet-table td.sheet-rowlabel { font-weight: 700; color: var(--green-dk); white-space: nowrap; text-align: center; vertical-align: middle; }
+/* 行首摆图的行（第2课活动一：看数据图判断表现形式）。
+   四张图长宽比差很多（视频截图 1.75、卡通 1.03），统一放进同尺寸的框里 contain 缩放，四行才齐整。 */
+.sheet-table td.sheet-rowimg { padding: 6px 8px; }
+.sheet-table td.sheet-rowimg img.sheet-rowimg-pic {
+  display: block; width: 200px; height: 115px; object-fit: contain;
+  margin: 0 auto; border-radius: 6px; border: 1px solid var(--line); background: #fff;
+}
+.sheet-rowimg-tag { display: block; margin-top: 3px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.sheet-table tbody tr.sheet-given td { background: var(--green-lt); font-weight: 600; color: var(--green-dk); }
 .sheet-remind { margin-top: 10px; font-size: 13px; color: var(--ink-2); background: #f7faf6; border-radius: 8px; padding: 8px 10px; }
+/* 多板块任务单：一个任务单里放活动一/二/三，每板块一张表 */
+.sheet-sec { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.sheet-sec-head { font-size: 14.5px; font-weight: 700; color: var(--green-dk); }
+/* 下拉式选择（连线题/表格填空用下拉，学生不用打字） */
+.sheet-table td select.sheet-pick {
+  width: 100%; box-sizing: border-box; padding: 7px 6px; font-size: 13.5px;
+  appearance: auto; -webkit-appearance: menulist;
+}
+.sheet-table td:has(select.sheet-pick) { padding: 4px; }
+/* 列特别多的表（第3课任务一：照 Excel 版式的 36 列枚举表）：固定列宽 + 外层横向滚动。
+   格子里只填短数字/选 √×，所以行标签列固定宽、其余等分，字号和内边距收小一点。 */
+.sheet-scroll { margin-top: 6px; }
+.sheet-table.sheet-wide { margin-top: 0; table-layout: fixed; }
+.sheet-table.sheet-wide th:first-child { width: 126px; }
+.sheet-table.sheet-wide th,
+.sheet-table.sheet-wide td { padding: 3px 2px; font-size: 12.5px; }
+.sheet-table.sheet-wide th { white-space: nowrap; font-weight: 600; }
+.sheet-table.sheet-wide td.sheet-rowlabel { white-space: normal; line-height: 1.2; font-size: 12.5px; }
+.sheet-table.sheet-wide td input.sheet-cell { padding: 4px 1px; font-size: 12.5px; }
+.sheet-table.sheet-wide td select.sheet-pick { padding: 4px 1px; font-size: 12.5px; }
+.sheet-table.sheet-wide td:has(select.sheet-pick) { padding: 3px 2px; }
+/* 任务单里的流程图（第3课任务二）：和课后小测用同一个渲染器 */
+.sheet-flow { margin-top: 8px; }
 /* 教师端：班级胶囊 / 赋分输入 / 期末汇总 */
 .cls-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; }
 .cls-chip {
@@ -164,6 +247,20 @@ table.sheet-table { margin-top: 6px; }
 .cls-chip.on { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
 .cls-chip.on small { color: rgba(255, 255, 255, .85); }
 input.score-in { width: 62px; padding: 5px 4px; font-size: 14px; text-align: center; }
+/* 赋分台状态配色：红=未交、橙=未赋分、绿=已赋分（整行浅底 + 左侧色条，一眼扫出谁还没批） */
+.tbl tr.row-miss td { background: #fdeaea; }
+.tbl tr.row-miss td:first-child { border-left: 4px solid var(--bad); }
+.tbl tr.row-noscore td { background: #fff6e8; }
+.tbl tr.row-noscore td:first-child { border-left: 4px solid var(--warn); }
+.tbl tr.row-scored td { background: #eaf7ee; }
+.tbl tr.row-scored td:first-child { border-left: 4px solid var(--ok); }
+.tbl tr.row-noscore input.score-in { border-color: var(--warn); }
+.tbl tr.row-scored input.score-in { border-color: #bfe6ca; }
+.mark-legend { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 2px 4px; font-size: 12.5px; color: var(--ink-2); }
+.mark-legend .lg { padding: 2px 9px; border-radius: 11px; font-weight: 600; }
+.mark-legend .lg-miss { background: #fdeaea; color: var(--bad); border: 1px solid #f6cbcb; }
+.mark-legend .lg-noscore { background: #fff3e0; color: var(--warn); border: 1px solid #ffe0b2; }
+.mark-legend .lg-scored { background: #e7f6ec; color: var(--ok); border: 1px solid #bfe6ca; }
 .sum-cell { font-weight: 700; color: var(--green-dk); }
 .sum-total { font-weight: 800; color: var(--green); font-size: 15px; }
 .sum-table th.cnt { white-space: nowrap; text-align: center; }
@@ -263,7 +360,13 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .hist b { color: var(--green); }
 
 /* 流程图 */
-.fc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.fc-scroll { width: 100%; max-width: 100%; box-sizing: border-box; overflow-x: auto; -webkit-overflow-scrolling: touch; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+/* 教师端「提交内容」里的多列表（枚举表）：列宽均分、只在这块里横滑，别把赋分栏挤出屏幕。
+   width:0 + min-width:100% 让它不参与外层表格的宽度计算（外层是自适应布局的表格）。 */
+.sheet-detail-scroll { width: 0; min-width: 100%; }
+.sheet-detail table.sheet-wide { table-layout: fixed; width: 100%; font-size: 12px; }
+.sheet-detail table.sheet-wide th, .sheet-detail table.sheet-wide td { padding: 3px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-detail table.sheet-wide th:first-child, .sheet-detail table.sheet-wide td:first-child { width: 76px; white-space: normal; }
 .fc { position: relative; background: #fff; }
 .fc-edges { position: absolute; left: 0; top: 0; z-index: 1; }
 /* 节点外框由 SVG 绘制（圆角矩形/矩形/平行四边形/菱形），HTML 层只放文字与选词控件 */
@@ -306,3 +409,61 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .small-input { padding: 6px 8px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; width: 90px; }
 .badge-count { color: var(--ink-2); font-size: 12.5px; }
 h1.screen { font-size: 20px; margin: 6px 0 4px; }
+
+/* ===== 我的证书（一课一证）：证书墙 + 单课证书 ===== */
+.certwall { display: grid; gap: 10px; }
+.cw-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: var(--shadow); padding: 12px 14px;
+}
+.cw-card.todo { background: #f7f9f7; box-shadow: none; }
+.cw-card .cw-ico { font-size: 30px; line-height: 1; flex: none; }
+.cw-card.todo .cw-ico { opacity: .45; }
+.cw-mid { flex: 1; min-width: 0; }
+.cw-mid h4 { margin: 0; font-size: 16px; color: var(--ink); }
+.cw-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; font-size: 13px; color: var(--ink-2); }
+.cw-stars { color: #e8a33d; font-size: 17px; letter-spacing: 2px; }
+.cw-num { color: var(--green-dk); }
+.cw-cmt { font-size: 13.5px; color: var(--ink); margin-top: 3px; }
+.cw-cmt.muted { color: var(--ink-2); }
+.cw-sub { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.cw-card .btn { flex: none; font-size: 13px; padding: 8px 12px; }
+@media (max-width: 560px) {
+  .cw-card { flex-wrap: wrap; }
+  .cw-card .btn { width: 100%; }
+}
+
+/* 单课证书：canvas 直接展示，窄屏横向可滚动（同 .tbl-scroll / .fc-scroll 的做法） */
+.cert-sheet {
+  background: #fff; border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: var(--shadow); padding: 10px; margin-bottom: 14px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.cert-sheet canvas { display: block; margin: 0 auto; border-radius: 8px; }
+
+/* 结果页/任务单保存后的证书入口 */
+.cert-cta {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+}
+.cert-cta .btn { font-size: 13px; padding: 8px 12px; }
+.pill.cert {
+  background: #fff8e6; border-color: #f0d9a8; color: #a9791a;
+  cursor: pointer; user-select: none;
+}
+.pill.cert:hover { background: #fdf0d0; }
+
+/* 打印证书：只印证书本身（A4 竖版，正好一页），顶栏/按钮/墙全部收掉 */
+@media print {
+  .no-print, .topbar, #view-wall, #view-login, #wallBody { display: none !important; }
+  body { background: #fff; }
+  .wrap { max-width: 100%; padding: 0; margin: 0; }
+  .card { box-shadow: none; border: 0; padding: 0; margin: 0 0 6px; }
+  .cert-sheet {
+    border: 0; box-shadow: none; padding: 0; margin: 0;
+    overflow: visible; /* 不复位的话打印出来只有窄屏那一截 */
+  }
+  .cert-sheet canvas { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: auto !important; border-radius: 0; }
+  @page { size: A4 portrait; margin: 10mm; }
+}

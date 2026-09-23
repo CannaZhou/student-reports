@@ -16,9 +16,14 @@ function serve(req, res, ctx) {
   try { pathname = decodeURIComponent(new URL(req.url, 'http://local').pathname); }
   catch (e) { res.writeHead(400); return res.end('Bad Request'); }
 
+  // 无扩展名的请求走不到下面的白名单（extname='' 会被判 403），所以页面路径必须在这里列全。
+  // /index、/index.html 也一起放行：老页面里「首页」写的是相对链接 href="index"（会被浏览器解成
+  // /index），书签里也可能留着这个地址，别让它撞上 403。
   if (pathname === '/') pathname = '/index.html';
+  else if (pathname === '/index') pathname = '/index.html';
   else if (pathname === '/quiz') pathname = '/quiz.html';
   else if (pathname === '/scores') pathname = '/scores.html';
+  else if (pathname === '/cert') pathname = '/cert.html';
   else if (pathname === '/teacher') pathname = '/teacher.html';
 
   if (!pathname.startsWith('/')) { res.writeHead(400); return res.end('Bad Request'); }

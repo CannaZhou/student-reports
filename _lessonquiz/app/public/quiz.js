@@ -23,6 +23,9 @@
   }
   function show(v) {
     ['login', 'map', 'quiz', 'sheet', 'result'].forEach((x) => { $('view-' + x).hidden = (x !== v); });
+    // 任务单页左侧多一列名单，整页放宽一点，免得把表格/流程图挤窄；其它页维持 880 的单列
+    const wrap = document.querySelector('.wrap');
+    if (wrap) wrap.classList.toggle('wide', v === 'sheet');
     window.scrollTo(0, 0);
     // 视图可见后再校准流程图缩放（构建时可能处于隐藏态，clientWidth 为 0）
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -37,6 +40,7 @@
   let CATALOG = null;       // [{grade,semester,units:[{id,title,lessons:[…]}]}]
   let LESSON = null;        // 正在作答的卷 {id,title,full,questions}
   let SHEET = null;         // 正在打开的课内任务单 {lessonId,title,sheet,prev,lastAt}
+  const FLOWROWS = [];      // 任务单里流程图板块所填：{_i:第几行, values:{空位key:所选词}}
   let curGrade = 0;         // 地图当前年级
   const DOMV = {};          // 作答控件引用（用于提交时取值）key = qid -> {collect:fn}
 
@@ -140,18 +144,29 @@
         const subTxt = '课后小测 ' + l.num + ' 题 · 每题答对得 1 积分' + (l.hasFlow ? ' · 含流程图填空' : '') + (withSheet ? ' · 含课内任务单' : '');
         mid.appendChild(el('div', 'sub', subTxt));
         const right = el('div', 'r');
+        let badges;
         if (l.done) {
           const s = el('div', 'score', l.best + '');
           s.appendChild(el('span', 'sub', '　最高'));
           right.appendChild(s);
-          const bd = el('div', 'badges');
-          bd.appendChild(el('span', 'pill ok', '已做 ' + l.attempts + ' 次'));
-          bd.appendChild(el('span', 'pill', '最近 ' + (l.last == null ? '—' : l.last)));
-          right.appendChild(bd);
+          badges = el('div', 'badges');
+          badges.appendChild(el('span', 'pill ok', '已做 ' + l.attempts + ' 次'));
+          badges.appendChild(el('span', 'pill', '最近 ' + (l.last == null ? '—' : l.last)));
+          right.appendChild(badges);
         } else {
           right.appendChild(el('div', 'score none', '未做'));
-          const bd2 = el('div', 'badges'); bd2.appendChild(el('span', 'pill', '可点开始'));
-          right.appendChild(bd2);
+          badges = el('div', 'badges'); badges.appendChild(el('span', 'pill', '可点开始'));
+          right.appendChild(badges);
+        }
+        // 已发证的课挂一枚可点胶囊（放徽章行里，不塞进下面的按钮条——窄屏塞三个按钮会挤破版式）
+        if (l.cert && l.cert.issued) {
+          const cb = el('span', 'pill cert', '🎖️ ' + l.cert.stars.toFixed(1) + ' 星');
+          cb.appendChild(el('span', 'sub', ' 证书'));
+          cb.title = l.cert.pending
+            ? '本课证书已颁发；课内任务单待老师批阅，批完综合评价会自动更新'
+            : '本课证书已颁发，点开查看';
+          cb.onclick = (e) => { e.stopPropagation(); location.href = 'cert?lesson=' + encodeURIComponent(l.id); };
+          badges.appendChild(cb);
         }
         card.appendChild(ico); card.appendChild(mid); card.appendChild(right);
         if (withSheet) {
@@ -393,47 +408,42 @@
     const h2 = el('h2', null, SHEET.title);
     h2.appendChild(el('small', null, ' · ' + (s.title || '课内任务单')));
     card.appendChild(h2);
-    if (s.heading) card.appendChild(el('div', 'sheet-heading', s.heading));
-    if (s.caption) card.appendChild(el('div', 'sheet-caption', s.caption));
-    if (s.intro) card.appendChild(el('p', 'muted', s.intro));
 
-    const cols = s.cols || [];
-    const table = el('table', 'tbl sheet-table');
-    const thead = el('thead');
-    const hr = el('tr');
-    cols.forEach((c) => hr.appendChild(el('th', null, c.label)));
-    thead.appendChild(hr);
-    table.appendChild(thead);
-    const tb = el('tbody');
+    // 老的单表任务单：sections 里只有一张表；多板块任务单：每板块一张表（活动一/二/三…）
+    const blocks = (Array.isArray(s.sections) && s.sections.length) ? s.sections : [s];
+    const multi = blocks.length > 1;
+    const prevMap = prevRowMap();
+    const gi = { v: 0 }; // 全局可填行序号，与后端 sheetRowSpecs 的顺序一一对应
+    FLOWROWS.length = 0;
 
-    // 示例行（只读，置灰）
-    if (s.example) {
-      const exr = el('tr', 'sheet-example');
-      cols.forEach((c, i) => {
-        const td = el('td');
-        td.textContent = (i === 0 ? '例：' : '') + (s.example[c.key] || '');
-        exr.appendChild(td);
-      });
-      tb.appendChild(exr);
+    if (multi) {
+      if (s.heading) card.appendChild(el('div', 'sheet-heading', s.heading));
+      if (s.caption) card.appendChild(el('div', 'sheet-caption', s.caption));
+      if (s.intro) card.appendChild(el('p', 'muted', s.intro));
+      if (s.image && s.image.src) card.appendChild(sheetFigure(s.image));
+      if (s.code) card.appendChild(sheetCode(s.code));
     }
 
-    // 可填行：rows 行，先按上次所填预填，其余留空
-    const n = s.rows || 3;
-    for (let i = 0; i < n; i++) {
-      const tr = el('tr');
-      const prev = (SHEET.prev && SHEET.prev[i]) || {};
-      cols.forEach((c) => {
-        const td = el('td');
-        const inp = el('input', 'input sheet-cell');
-        inp.placeholder = '填写' + c.label;
-        inp.value = prev[c.key] || '';
-        td.appendChild(inp);
-        tr.appendChild(td);
-      });
-      tb.appendChild(tr);
-    }
-    table.appendChild(tb);
-    card.appendChild(table);
+    blocks.forEach((b, bi) => {
+      const host = multi ? el('div', 'sheet-sec') : card;
+      if (multi) {
+        host.appendChild(el('div', 'sheet-sec-head', b.heading || ('活动' + (bi + 1))));
+        if (b.caption) host.appendChild(el('div', 'sheet-caption', b.caption));
+        if (b.intro) host.appendChild(el('p', 'muted', b.intro));
+        if (b.image && b.image.src) host.appendChild(sheetFigure(b.image));
+        if (b.code) host.appendChild(sheetCode(b.code));
+      } else {
+        if (b.heading) host.appendChild(el('div', 'sheet-heading', b.heading));
+        if (b.caption) host.appendChild(el('div', 'sheet-caption', b.caption));
+        if (b.intro) host.appendChild(el('p', 'muted', b.intro));
+        if (b.image && b.image.src) host.appendChild(sheetFigure(b.image));
+        if (b.code) host.appendChild(sheetCode(b.code));
+      }
+      // 板块可以是一整张流程图（任务二）：不判分，选完跟着任务单一起存给老师看
+      if (b.flow) host.appendChild(buildSheetFlow(b, prevMap, gi));
+      else host.appendChild(buildSheetTable(b, prevMap, gi));
+      if (multi) card.appendChild(host);
+    });
 
     if (s.remind) {
       const rem = el('div', 'sheet-remind');
@@ -449,21 +459,238 @@
       note.textContent = '上次保存 ' + fmtHm(SHEET.lastAt) + ' · 老师能看到，可继续修改后再保存';
       note.style.color = '';
     } else {
-      note.textContent = '填好 2~3 处后点“保存任务单”，可反复修改';
+      note.textContent = '填写完成后点“保存任务单”，可反复修改';
     }
+    renderSheetSide();
+  }
+
+  // 左侧「本班这一课交没交」名单：只列姓名 + 一个红/绿圆点，不显示分数和别人填的内容
+  function renderSheetSide() {
+    const host = $('sheetSide'); host.innerHTML = '';
+    const m = SHEET && SHEET.mates;
+    if (!m || !m.list || !m.list.length) { host.hidden = true; return; }
+    host.hidden = false;
+    const card = el('div', 'card side-card');
+
+    card.appendChild(el('div', 'side-cls', m.clsName || '本班'));
+    const hint = el('div', 'side-hint');
+    [['dot-no', '红色＝未提交'], ['dot-yes', '绿色＝已提交']].forEach((p) => {
+      const line = el('div', 'hint-line');
+      line.appendChild(el('span', 'dot ' + p[0]));
+      line.appendChild(document.createTextNode(p[1]));
+      hint.appendChild(line);
+    });
+    card.appendChild(hint);
+    card.appendChild(el('div', 'side-count', '已交 ' + m.submitted + ' / ' + m.total + ' 人'));
+
+    const ul = el('ul', 'mate-list');
+    m.list.forEach((r) => {
+      const li = el('li', 'mate ' + (r.done ? 'done' : 'todo') + (r.me ? ' me' : ''));
+      li.appendChild(el('span', 'dot ' + (r.done ? 'dot-yes' : 'dot-no')));
+      li.appendChild(el('span', 'mate-name', r.name));
+      if (r.me) li.appendChild(el('span', 'mate-me', '我'));
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+    host.appendChild(card);
+    // 自己在名单里可能排得很靠后，进页面先滚到自己那行
+    const meLi = ul.querySelector('.mate.me');
+    if (meLi && ul.scrollHeight > ul.clientHeight) ul.scrollTop = Math.max(0, meLi.offsetTop - ul.clientHeight / 2);
+  }
+
+  // 题图：教材/练习册上的原图（学生照着图填表）
+  function sheetFigure(im) {
+    const fig = el('div', 'sheet-figure');
+    const img = el('img');
+    img.src = im.src;
+    img.alt = im.alt || '题目图片';
+    fig.appendChild(img);
+    if (im.caption) fig.appendChild(el('div', 'sheet-figure-cap', im.caption));
+    return fig;
+  }
+
+  // 板块里带的一段程序（第4课“鸡兔同笼.py”）：按原样保留换行和缩进，等宽字体显示。
+  // 用 textContent 塞进 <pre>，不是 HTML，所以程序里的 < > 不会被当成标签。
+  function sheetCode(code) {
+    const pre = el('pre', 'sheet-code');
+    pre.textContent = String(code).replace(/\t/g, '    ').replace(/\s+$/, '');
+    return pre;
+  }
+
+  // 预填：新数据带 _i（第几行），老数据没 _i 就按数组位置
+  function prevRowMap() {
+    const m = {};
+    (SHEET.prev || []).forEach((r, i) => {
+      if (!r) return;
+      const k = (r._i === undefined || r._i === null) ? i : r._i;
+      if (m[k] === undefined) m[k] = r;
+    });
+    return m;
+  }
+
+  // 任务单里的流程图板块：和“课后小测”的流程图填空同一个渲染器，只是不判分
+  // 整块算「一行」（_i 与后端 sheetRowSpecs 对齐），选中的词按空位 key 存下来
+  function buildSheetFlow(b, prevMap, gi) {
+    const rowIdx = gi.v++;
+    const prev = prevMap[rowIdx] || {};
+    const values = {};
+    (b.flow.blanks || []).forEach((x) => { if (prev[x.key]) values[x.key] = prev[x.key]; });
+    const host = el('div', 'sheet-flow');
+    const rec = { _i: rowIdx, values };
+    FLOWROWS.push(rec);
+    if (window.Flowchart) {
+      Flowchart.render(host, b.flow, {
+        mode: 'answer', values,
+        onChange: (k, v) => { if (v) rec.values[k] = v; else delete rec.values[k]; },
+      });
+    }
+    return host;
+  }
+
+  // 一张表：cols/rows/example/rowLabels/given/givenTop/rowPick/noHead/center
+  // 列带 pick 的格子渲染成下拉选择（连线题、表格填空都用它，比手打简单）；
+  // rowPick 是「按行」给整行套下拉（如“是否满足正确解条件?”那一行整行选 √/×）。
+  function buildSheetTable(b, prevMap, gi) {
+    const cols = b.cols || [];
+    const table = el('table', 'tbl sheet-table' + (b.center ? ' sheet-center' : ''));
+    // 列特别多的表（如枚举表 36 列）用固定列宽 + 外层横向滚动，否则会被挤成一团看不清
+    const wide = cols.length >= 12;
+    if (wide) {
+      table.classList.add('sheet-wide');
+      table.style.minWidth = (126 + (cols.length - 1) * 58) + 'px';
+    }
+    // noHead：整张表就是一格格白格，不印表头（表头文字由学生自己写，如“只数/头数/脚数”）
+    if (!b.noHead) {
+      const thead = el('thead');
+      const hr = el('tr');
+      cols.forEach((c) => hr.appendChild(el('th', null, c.label || '')));
+      thead.appendChild(hr);
+      table.appendChild(thead);
+    }
+    const tb = el('tbody');
+    const rowPick = b.rowPick || {};
+
+    // 已知行（只读）：givenTop 印在表头下面第一行（如枚举表的“兔的只数 0~35”），given 印在最下面
+    const renderGiven = (g) => {
+      const tr = el('tr', 'sheet-given');
+      cols.forEach((c) => {
+        const td = el('td');
+        td.dataset.col = c.key;
+        td.textContent = g[c.key] == null ? '' : g[c.key];
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    };
+    (b.givenTop ? (Array.isArray(b.givenTop) ? b.givenTop : [b.givenTop]) : []).forEach(renderGiven);
+
+    // 示例行（只读，置灰）
+    if (b.example) {
+      const exr = el('tr', 'sheet-example');
+      cols.forEach((c, i) => {
+        const td = el('td');
+        td.textContent = (i === 0 ? '例：' : '') + (b.example[c.key] || '');
+        exr.appendChild(td);
+      });
+      tb.appendChild(exr);
+    }
+
+    // 可填行：rows 行，先按上次所填预填，其余留空
+    // rowLabels 给了，就只给“有标签的行”做样子：第一列印好标签不可改，其余格给提示；
+    // 没给 rowLabels 的老任务单（如四年级第1课）照旧每行都给“填写X”提示。
+    // rowImages 给了，第一列就只摆图（如第2课活动一的四张数据图），学生端不印任何文字——
+    // 学生要自己看图判断形式，印了“图①”只是噪声。行标签 rowLabels[i] 仍要写：它不在学生端显示，
+    // 只给教师端当行号用（学生交上来这一格是空的，教师端就拿 rowLabels[i] 兜底印“图①”）。
+    // 万一以后要印角标，给 rowImages[i] 加个 tag 字段即可。
+    const n = b.rows || 0;
+    const labels = b.rowLabels || [];
+    const imgs = b.rowImages || [];
+    const hasLabels = labels.length > 0;
+    for (let i = 0; i < n; i++) {
+      const tr = el('tr');
+      tr.dataset.rowi = gi.v; // 这一行是「第几个可填行」，收卷时按它归位（流程图板块也占一个号）
+      const prev = prevMap[gi.v] || {};
+      const hint = hasLabels ? !!labels[i] : true; // 这一行要不要给提示文字
+      cols.forEach((c, ci) => {
+        const td = el('td');
+        if (ci === 0 && (imgs[i] || labels[i])) {
+          td.className = 'sheet-rowlabel' + (imgs[i] ? ' sheet-rowimg' : '');
+          td.dataset.col = c.key;
+          if (imgs[i]) {
+            const im = el('img', 'sheet-rowimg-pic');
+            im.src = imgs[i].src;
+            im.alt = imgs[i].alt || labels[i] || ('图' + (i + 1)); // 图没了文字，alt 留给读屏
+            td.appendChild(im);
+            if (imgs[i].tag) td.appendChild(el('span', 'sheet-rowimg-tag', imgs[i].tag));
+          } else {
+            td.textContent = labels[i];
+          }
+        } else if ((c.pick && c.pick.length) || (rowPick[i] && rowPick[i].length)) {
+          // 候选词：列自己的 pick 优先，其次看这一行有没有 rowPick（如 √/× 那一行）
+          const words = (c.pick && c.pick.length) ? c.pick : rowPick[i];
+          const sel = el('select', 'input sheet-cell sheet-pick');
+          sel.dataset.col = c.key;
+          const ph = el('option'); ph.value = ''; ph.textContent = '▾ 请选…'; ph.selected = true;
+          sel.appendChild(ph);
+          shuffle(words).forEach((w) => {
+            const o = el('option'); o.value = w; o.textContent = w; sel.appendChild(o);
+          });
+          sel.value = prev[c.key] || '';
+          td.appendChild(sel);
+        } else {
+          const inp = el('input', 'input sheet-cell');
+          inp.dataset.col = c.key;
+          // 题目已经印好的数据（preset，如「头 35、脚 94」）：先填好、置灰，学生不用再抄一遍。
+          // 打上 data-pre，收卷时这一格不算“学生填过”——否则学生只点一下保存就算交了。
+          const pre = (b.preset && b.preset[i] && b.preset[i][c.key] != null) ? String(b.preset[i][c.key]) : '';
+          if (pre) { inp.dataset.pre = '1'; td.classList.add('sheet-pre'); }
+          // 表头没写字就不给占位提示；宽表（36 列枚举表）格子窄，也不给长占位文字
+          if (hint && c.label && !wide) inp.placeholder = '填写' + c.label;
+          inp.value = prev[c.key] || pre;
+          td.appendChild(inp);
+        }
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+      gi.v++;
+    }
+
+    // 已知行（只读，印在下面，如合计行“鸡和兔 35 35 94”）：内容由图/题干给定，学生不用填
+    (b.given ? (Array.isArray(b.given) ? b.given : [b.given]) : []).forEach(renderGiven);
+    table.appendChild(tb);
+    if (!wide) return table;
+    const scroll = el('div', 'tbl-scroll sheet-scroll');
+    scroll.appendChild(table);
+    return scroll;
   }
 
   function collectSheetRows() {
-    const cols = (SHEET.sheet.cols || []).map((c) => c.key);
     const rows = [];
+    // 表格行：行号取自渲染时写在 tr 上的 data-rowi（跨板块连续编号，流程图板块也占一个号），
+    // 这样中间空着的行、以及夹在中间的流程图，都不会让后面的行错位。
     document.querySelectorAll('#sheetBody table.sheet-table tbody tr').forEach((tr) => {
-      if (tr.classList.contains('sheet-example')) return;
-      const ins = tr.querySelectorAll('input.sheet-cell');
-      if (!ins.length) return;
-      const row = {};
-      ins.forEach((inp, i) => { row[cols[i]] = inp.value.replace(/\s+/g, ' ').trim(); });
-      if (cols.some((k) => row[k])) rows.push(row);
+      if (tr.classList.contains('sheet-example') || tr.classList.contains('sheet-given')) return;
+      const cells = tr.querySelectorAll('[data-col]');
+      if (!cells.length) return;
+      const row = { _i: Number(tr.dataset.rowi) || 0 };
+      let hasData = false; // 只读的行标签（“鸡”“对象”）不算填过，避免空表也当“已提交”
+      cells.forEach((c) => {
+        const isField = (c.tagName === 'INPUT' || c.tagName === 'SELECT');
+        const v = (isField ? c.value : c.textContent).replace(/\s+/g, ' ').trim();
+        row[c.dataset.col] = v;
+        // 题目印好的格子（data-pre）跟着一起存，但不算学生填的内容
+        if (isField && v && !c.dataset.pre) hasData = true;
+      });
+      if (hasData) rows.push(row);
     });
+    // 流程图板块：选中的词按空位 key 存成一行（一个空都没选就不占行）
+    FLOWROWS.forEach((r) => {
+      const keys = Object.keys(r.values);
+      if (!keys.length) return;
+      const row = { _i: r._i };
+      keys.forEach((k) => { row[k] = String(r.values[k]).replace(/\s+/g, ' ').trim(); });
+      rows.push(row);
+    });
+    rows.sort((a, b) => a._i - b._i);
     return rows;
   }
 
@@ -476,7 +703,28 @@
       const j = await api('/api/lesson/' + encodeURIComponent(SHEET.lessonId) + '/sheet/submit', 'POST', { rows });
       SHEET.prev = j.rows; SHEET.lastAt = j.savedAt;
       $('sheetNote').textContent = '已保存 ' + fmtHm(j.savedAt) + ' ✓ 老师能看到，还可继续修改';
-      toast('任务单已保存 ✓');
+      // 自己那一格当场变绿，不用重开页面（左栏是这一课交没交，保存过就一直算已交）
+      const mates = SHEET.mates;
+      if (mates && Array.isArray(mates.list)) {
+        const me = mates.list.find((r) => r.me);
+        if (me && !me.done) { me.done = true; mates.submitted = (mates.submitted || 0) + 1; renderSheetSide(); }
+      }
+      // 交完任务单这一刻可能就集齐了本课任务 → 当场告诉学生证书已颁发
+      const c = j.cert;
+      if (c && c.issued) {
+        toast(c.pending ? '🎖️ 本课证书已颁发（任务单待老师批阅）' : '🎖️ 任务都做完了，本课证书已颁发');
+        const note = $('sheetNote');
+        if (note && !note.querySelector('.cert-jump')) {
+          const go = el('button', 'btn cert-jump', '🎖️ 查看证书 →');
+          go.style.cssText = 'font-size:12px;padding:4px 10px;margin-left:8px';
+          go.onclick = () => { location.href = 'cert?lesson=' + encodeURIComponent(SHEET.lessonId); };
+          note.appendChild(go);
+        }
+      } else if (c && (c.missing || []).indexOf('quiz') >= 0) {
+        toast('任务单已保存 ✓ 再做完课后小测就能领本课证书');
+      } else {
+        toast('任务单已保存 ✓');
+      }
     } catch (e) { toast('保存失败：' + e.message); }
     btn.disabled = false;
   }
@@ -504,6 +752,24 @@
     else { lvl = '答对 ' + j.score + ' 题，得到 ' + j.score + ' 积分，别灰心，看讲解再练一次吧 💪'; tone = 'bad'; }
     hero.appendChild(el('div', 'pill ' + tone, lvl));
     hero.appendChild(el('div', 'muted', '每题整题全对得 1 积分 · 已自动记录到“我的成绩”，老师也能看到。'));
+
+    // 证书：小测交了、本课的任务都做完 → 这一刻颁发本课证书（有的课还要交课内任务单）
+    if (j.cert) {
+      const c = j.cert;
+      const line = el('div', 'cert-cta');
+      if (c.issued) {
+        line.appendChild(el('span', 'pill ok',
+          '🎖️ 本课证书 · ' + c.stars.toFixed(1) + ' 星 · ' + c.pct.toFixed(1) + '%'));
+        const go = el('button', 'btn', '查看我的证书 →');
+        go.onclick = () => { location.href = 'cert?lesson=' + encodeURIComponent(LESSON.id); };
+        line.appendChild(go);
+        if (c.pending) line.appendChild(el('span', 'muted', '课内任务单待老师批阅，批完综合评价与星级会自动更新'));
+      } else {
+        const miss = (c.missing || []).map((k) => (k === 'sheet' ? '课内任务单' : '课后小测')).join('、');
+        line.appendChild(el('span', 'muted', '🎖️ 还差' + (miss || '一点') + '，交完就能领到本课证书'));
+      }
+      hero.appendChild(line);
+    }
     body.appendChild(hero);
 
     // 逐题

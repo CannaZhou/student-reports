@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>课堂答题 · 信息科技</title>
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
 <header class="topbar">
@@ -13,7 +13,7 @@
   <div class="sp"></div>
   <div class="who" id="whoBox" hidden></div>
   <button class="btn" id="logoutBtn" hidden>退出</button>
-  <a class="btn" href="index" style="text-decoration:none">首页</a>
+  <a class="btn" href="/" style="text-decoration:none">首页</a>
 </header>
 
 <div class="wrap">
@@ -55,14 +55,19 @@
     </div></div>
   </section>
 
-  <!-- 视图：课内任务单（开放填写，不判分，可反复保存） -->
+  <!-- 视图：课内任务单（开放填写，不判分，可反复保存）。左侧是本班「这一课交没交」名单 -->
   <section id="view-sheet" hidden>
-    <div class="card" id="sheetHeader"></div>
-    <div id="sheetBody"></div>
-    <div class="submit-bar"><div class="inner">
-      <div class="done-note" id="sheetNote" style="flex:1"></div>
-      <button class="btn" id="sheetSaveBtn">保存任务单</button>
-    </div></div>
+    <div class="sheet-layout">
+      <aside class="sheet-side" id="sheetSide" hidden></aside>
+      <div class="sheet-main">
+        <div class="card" id="sheetHeader"></div>
+        <div id="sheetBody"></div>
+        <div class="submit-bar"><div class="inner">
+          <div class="done-note" id="sheetNote" style="flex:1"></div>
+          <button class="btn" id="sheetSaveBtn">保存任务单</button>
+        </div></div>
+      </div>
+    </div>
   </section>
 
   <!-- 视图：结果 -->
@@ -72,7 +77,7 @@
 
 </div>
 
-<script src="flowchart.js?v=10"></script>
-<script src="quiz.js?v=10"></script>
+<script src="flowchart.js?v=12"></script>
+<script src="quiz.js?v=23"></script>
 </body>
 </html>

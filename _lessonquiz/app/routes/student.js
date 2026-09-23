@@ -3,8 +3,9 @@ const {
   readBody, json, ok, fail, setSessionCookie, clearSessionCookie, readSession,
 } = require('./helpers.js');
 const sessions = require('../core/sessions.js');
-const { publicQuestion, publicSheet, buildCatalog } = require('../core/catalog.js');
+const { lessonName, publicQuestion, publicSheet, sheetRowSpecs, buildCatalog } = require('../core/catalog.js');
 const { gradeBasic, gradeBlanks, blankListOf } = require('../core/grade.js');
+const { evalLesson, issueIfReady, buildCertWall, certBrief, certToast, whereOf } = require('../core/cert.js');
 
 function studentOf(sess, store) {
   if (!sess || sess.role !== 'student') return null;
@@ -21,6 +22,23 @@ function displayChoice(q) {
 function fillAnswerText(q) {
   if (q.answers && q.answers.length) return q.answers.join(' / ');
   return q.answer || '';
+}
+// 本班「这一课任务单交没交」名单：只给姓名 + 是否已交，不给分数、不给别人填的内容。
+// 按名单导入顺序（＝学号顺序）排，学生自己那行标 me，前端加粗。
+function classMateStatus(store, stu, lessonId) {
+  const list = store.rosterList().filter((s) => s.active && s.className === stu.className);
+  const rows = list.map((s) => ({
+    name: s.name,
+    uid: s.uid,
+    done: !!store.sheetStat(s.uid, lessonId),
+    me: s.uid === stu.uid,
+  }));
+  return {
+    clsName: stu.className,
+    total: rows.length,
+    submitted: rows.filter((r) => r.done).length,
+    list: rows,
+  };
 }
 
 module.exports = { register };
@@ -74,7 +92,7 @@ function register(router, { store, config }) {
     if (!lesson) return fail(res, 404, '没有这份检测卷');
     ok(res, {
       lesson: {
-        id: lesson.id, title: lesson.title,
+        id: lesson.id, title: lessonName(lesson),
         full: (lesson.questions || []).length, // 满分=题数（每题1积分）
         questions: (lesson.questions || []).map((q) => publicQuestion(q)),
       },
@@ -115,6 +133,7 @@ function register(router, { store, config }) {
     const full = (lesson.questions || []).length;
     const record = { at: new Date().toISOString(), lessonId: lesson.id, score, full, perQ };
 
+    let certEv = null;
     await store.mutate(() => {
       let p = store.progress[stu.uid] || {
         uid: stu.uid, name: stu.name, className: stu.className,
@@ -127,6 +146,8 @@ function register(router, { store, config }) {
       if (score > ls.best) ls.best = score;
       p.lessons[lesson.id] = ls;
       store.progress[stu.uid] = p;
+      // 小测交了：有任务单的课要等任务单也交了才发证，无任务单的课当场发（同一份内存里判，避免二次写盘）
+      certEv = issueIfReady(store, stu, lesson).ev;
       store.saveProgress(stu.uid);
     });
 
@@ -146,7 +167,7 @@ function register(router, { store, config }) {
       return base;
     });
 
-    ok(res, { score, full, perQ, detail });
+    ok(res, { score, full, perQ, detail, cert: certToast(certEv) });
   });
 
   // 课内任务单（开放表）：取任务单内容 + 该生上次所填（可续写）
@@ -158,10 +179,11 @@ function register(router, { store, config }) {
     if (!lesson.sheet) return fail(res, 404, '本课没有课内任务单');
     const sh = store.sheetStat(stu.uid, lesson.id);
     ok(res, {
-      lessonId: lesson.id, title: lesson.title,
+      lessonId: lesson.id, title: lessonName(lesson),
       sheet: publicSheet(lesson.sheet),
       prev: store.lastSheetRows(stu.uid, lesson.id),
       lastAt: sh ? (sh.lastAt || null) : null,
+      mates: classMateStatus(store, stu, lesson.id),
     });
   });
 
@@ -175,16 +197,24 @@ function register(router, { store, config }) {
     const body = await readBody(req, config.maxBodyMB * 1024 * 1024);
     const CELL = 200; // 单格长度上限（字符）
     const clean = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, CELL);
-    const keys = (lesson.sheet.cols || []).map((c) => c.key);
+    // 一「视觉行」一套 key（多板块任务单按板块依次展开）；行自带 _i 指明自己是第几行，
+    // 这样中间空着的行不会让后面的行错位。
+    const specs = sheetRowSpecs(lesson.sheet);
     const rows = [];
-    for (const r of (body.rows || []).slice(0, lesson.sheet.rows || 9)) {
+    let auto = 0;
+    for (const r of (body.rows || []).slice(0, specs.length)) {
       if (!r || typeof r !== 'object') continue;
-      const row = {};
+      const i = Number.isInteger(r._i) ? r._i : auto++;
+      const keys = specs[i];
+      if (!keys) continue;
+      const row = { _i: i };
       for (const k of keys) row[k] = clean(r[k]);
       if (keys.some((k) => row[k])) rows.push(row);
     }
+    rows.sort((a, b) => a._i - b._i);
     if (!rows.length) return fail(res, 400, '请至少填一行再保存');
     let savedAt = null;
+    let certEv = null;
     await store.mutate(() => {
       let p = store.progress[stu.uid] || {
         uid: stu.uid, name: stu.name, className: stu.className,
@@ -199,9 +229,33 @@ function register(router, { store, config }) {
       e.lastAt = savedAt;
       p.sheets[lesson.id] = e;
       store.progress[stu.uid] = p;
+      // 任务单交了：若本课小测也交过，这一刻就达成「做完一课的任务」→ 发证
+      certEv = issueIfReady(store, stu, lesson).ev;
       store.saveProgress(stu.uid);
     });
-    ok(res, { savedAt, rows });
+    ok(res, { savedAt, rows, cert: certToast(certEv) });
+  });
+
+  // 证书墙：本年级全部课（+本人有记录的其它课），未发证的也返回，前端标「还差什么」
+  router.add('GET', '/api/student/certs', (req, res) => {
+    const stu = studentOf(readSession(req, config), store);
+    if (!stu) return fail(res, 401, '未登录');
+    ok(res, buildCertWall(store, stu));
+  });
+
+  // 单课证书（未达成也返回，证书页显示"还差哪一步"）
+  router.add('GET', '/api/student/certs/:id', (req, res, ctx, params) => {
+    const stu = studentOf(readSession(req, config), store);
+    if (!stu) return fail(res, 401, '未登录');
+    const lesson = store.findLesson(params.id);
+    if (!lesson) return fail(res, 404, '没有这一课');
+    const item = evalLesson(store, stu, lesson);
+    const where = whereOf(store, lesson.id);
+    item.grade = where.grade; item.semester = where.semester; item.unitTitle = where.unitTitle;
+    ok(res, {
+      student: { name: stu.name, className: stu.className, grade: stu.grade },
+      item,
+    });
   });
 
   // 本人成绩：按本年级课序一行一课，各含 小测积分 与 任务单老师评分(0–10)
@@ -234,7 +288,7 @@ function register(router, { store, config }) {
       if (!st && !marked && !submitted) continue;                // 没答没评 → 不占行
       rows.push({
         lessonId: lid,
-        title: l.title,
+        title: lessonName(l),
         hasSheet: !!l.sheet,
         best: st && typeof st.best === 'number' ? st.best : null,
         lastScore: st && typeof st.lastScore === 'number' ? st.lastScore : null,
@@ -243,6 +297,7 @@ function register(router, { store, config }) {
         task: marked ? m.score : null,                           // 未评为 null（与给了 0 区分）
         taskAt: marked ? (m.at || null) : null,
         sheetSubmitted: submitted,
+        cert: certBrief(store, stu.uid, l), // {issued, pending, pct, stars, issuedAt, missing}
       });
     }
     ok(res, { rows, name: stu.name, className: stu.className });

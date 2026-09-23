@@ -5,3 +5,15 @@ output/
 *.log
 cc-switch/
 document.xml
+_ai_quiz/app/llm.config.json
+
+# 课堂检测系统：名单/成绩/会话密钥不入库
+_lessonquiz/app/data/
+
+# 看门狗运行痕迹（日志、上次启动时间）
+_lessonquiz/.watchdog_laststart
+_lessonquiz/tunnel_recent.err
+_lessonquiz/tunnel*.err
+
+# 课堂检测系统：验收用的临时实例副本与截图（tools/_tmp）
+_lessonquiz/tools/_tmp/
