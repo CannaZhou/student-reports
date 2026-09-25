@@ -233,32 +233,116 @@
     const p = (x) => String(x).padStart(2, '0');
     return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
-  function sheetDetailCell(s, cols) {
+  function sheetDetailCell(s, sheet) {
     const td = el('td'); td.colSpan = 7;
     const box = el('div', 'sheet-detail');
     box.style.padding = '4px 2px 8px';
-    const st = el('table', 'tbl'); st.style.fontSize = '12.5px';
-    const hr = el('tr');
-    (cols || []).forEach((c) => hr.appendChild(el('th', null, c.label)));
-    st.appendChild(hr);
-    (s.rows || []).forEach((row) => {
-      const tr = el('tr');
-      (cols || []).forEach((c) => {
-        const tc = el('td'); tc.textContent = row[c.key] || '—'; tr.appendChild(tc);
-      });
-      st.appendChild(tr);
+    // 提交的行按 _i（第几行）归位；老数据没有 _i 就按数组位置
+    const byIdx = {};
+    (s.rows || []).forEach((r, i) => {
+      if (!r) return;
+      const k = (r._i === undefined || r._i === null) ? i : r._i;
+      if (byIdx[k] === undefined) byIdx[k] = r;
     });
-    if (!(s.rows || []).length) st.appendChild(el('tr')).appendChild(el('td', null, '（空）'));
-    box.appendChild(st);
+    const blocks = (sheet && Array.isArray(sheet.sections) && sheet.sections.length) ? sheet.sections : [sheet];
+    if (!blocks || !blocks.length || !blocks[0]) {
+      box.appendChild(el('div', 'muted', s.submitted ? '（空）' : '—'));
+      td.appendChild(box); return td;
+    }
+    let gi = 0, shown = 0;
+    blocks.forEach((b, bi) => {
+      // 流程图板块（第3课任务二）：整块算「一行」，把学生选的词填回流程图里给老师看。
+      // 一个空都没选的就不画整张图（画布很大，会把赋分台撑得老长），只留一句说明。
+      if (b && b.flow) {
+        const frow = byIdx[gi];
+        const values = {};
+        (b.flow.blanks || []).forEach((x) => { if (frow && frow[x.key]) values[x.key] = frow[x.key]; });
+        gi += 1;
+        if (blocks.length > 1) box.appendChild(el('div', 'sheet-sec-head', (b.heading || ('活动' + (bi + 1)))));
+        if (!Object.keys(values).length) {
+          box.appendChild(el('div', 'muted', '【流程图】未作答'));
+          return;
+        }
+        const fh = el('div', 'sheet-flow');
+        box.appendChild(fh);
+        if (window.Flowchart) Flowchart.render(fh, b.flow, { mode: 'result', values, blanksState: [] });
+        else box.appendChild(el('div', 'muted', '【流程图】已作答（本页没加载流程图控件）'));
+        shown++;
+        return;
+      }
+      const cols = (b && b.cols) || [];
+      if (!cols.length) return;
+      if (blocks.length > 1) box.appendChild(el('div', 'sheet-sec-head', (b.heading || ('活动' + (bi + 1)))));
+      const st = el('table', 'tbl'); st.style.fontSize = '12.5px';
+      // 列特别多的表（枚举表 36 列）：给个够读数字的最小宽度，外面套一个「不撑破外层表格」的
+      // 横向滚动盒（width:0 + min-width:100%），这样 1440 屏上一屏能看全，窄屏也只在这块里左右滑，
+      // 姓名/赋分那几栏始终在屏幕上。
+      const wideT = cols.length >= 12;
+      if (wideT) { st.classList.add('sheet-wide'); st.style.minWidth = (76 + (cols.length - 1) * 34) + 'px'; }
+      // 表头没写字（空表任务单：表头由学生自己填）就不印这一行，免得顶一条空白
+      if (cols.some((c) => c.label)) {
+        const hr = el('tr');
+        cols.forEach((c) => hr.appendChild(el('th', null, c.label)));
+        st.appendChild(hr);
+      }
+      const labels = (b && b.rowLabels) || [];
+      const imgs = (b && b.rowImages) || [];
+      for (let i = 0; i < (b.rows || 0); i++) {
+        const row = byIdx[gi + i];
+        // 只印「学生填过的行」和「有行标签的行」（行标签让学生留空的项也看得见）
+        if (!row && !labels[i] && !imgs[i]) continue;
+        const tr = el('tr');
+        cols.forEach((c, ci) => {
+          const tc = el('td');
+          const v = row ? (row[c.key] || '') : '';
+          // 行首是数据图（第2课活动一）时给老师放个小缩略图，省得对着“图①”猜是哪张图。
+          // 只认「这次交的」数据（存的是“图①”角标）；改图前交的老数据存的是原来那版题面文字，
+          // 配上新图会张冠李戴，所以老数据照旧只印它当时填的那行字。
+          if (ci === 0 && imgs[i] && (!v || v === labels[i])) {
+            const im = el('img');
+            im.src = imgs[i].src;
+            im.alt = imgs[i].alt || labels[i] || ('图' + (i + 1));
+            im.style.cssText = 'display:block;max-width:110px;max-height:56px;border-radius:4px;border:1px solid var(--line);margin-bottom:3px';
+            tc.appendChild(im);
+            tc.appendChild(el('span', null, labels[i] || v || '—'));
+            if (!row) tc.style.color = 'var(--ink-2)';
+          } else if (!v && ci === 0 && labels[i]) { tc.textContent = labels[i]; tc.style.color = 'var(--ink-2)'; }
+          else tc.textContent = v || '—';
+          tr.appendChild(tc);
+        });
+        st.appendChild(tr); shown++;
+      }
+      gi += (b.rows || 0);
+      if (st.querySelector('tr')) {
+        if (!wideT) box.appendChild(st);
+        else { const sc = el('div', 'tbl-scroll sheet-detail-scroll'); sc.appendChild(st); box.appendChild(sc); }
+      }
+    });
+    if (!shown) box.appendChild(el('div', 'muted', '（空）'));
     td.appendChild(box);
     return td;
   }
-  // 任务单赋分台：按班看整班（含未交），边看内容边赋 0–10 分；另显示【本课小测】【学期累计】两列成绩
+  // 赋分台一眼看出来：红＝未交、橙＝未赋分、绿＝已赋分
+  function markState(s) {
+    if (!s.submitted) return { cls: 'row-miss', text: '未交' };
+    if (s.score == null) return { cls: 'row-noscore', text: '未赋分' };
+    return { cls: 'row-scored', text: '已赋分' };
+  }
+  function markLegend() {
+    const w = el('div', 'mark-legend');
+    [['lg-miss', '红 = 未交'], ['lg-noscore', '橙 = 未赋分'], ['lg-scored', '绿 = 已赋分']].forEach((p) => {
+      w.appendChild(el('span', 'lg ' + p[0], p[1]));
+    });
+    w.appendChild(el('span', 'muted', '　（0 分也是分：输入 0 后按回车或点到别处即保存；「清除」才是撤销评分）'));
+    return w;
+  }
+  // 任务单赋分台：按班看整班（含未交），边看内容边赋分（一题 1 分、做对几题得几分）；另显示【本课小测】【学期累计】两列成绩
   async function lessonSheets(id, clsName) {
     let j = null;
     const q = clsName ? ('?class=' + encodeURIComponent(clsName)) : '';
     try { j = await api('/api/teacher/sheet-board/' + encodeURIComponent(id) + q); }
     catch (e) { toast(e.message); return; }
+    const taskFull = j.lesson.taskFull || 1;   // 本课任务单共几题 = 赋分上限
     const body = $('tabBody'); body.innerHTML = '';
     const back = el('button', 'btn ghost', '← 返回各课情况');
     back.onclick = () => { cur = 'overview'; paintTabs(); loadTab(); };
@@ -266,8 +350,9 @@
     const row = el('div', 'row-flex');
     row.appendChild(el('b', null, j.lesson.title + ' · 课内任务单 · 赋分'));
     const gotN = j.students.filter((x) => x.submitted).length;
-    row.appendChild(el('span', 'muted', '　' + j.clsName + ' · 已交 ' + gotN + '/' + j.students.length + ' · 赋 0–10 分，0 分也算，留空=清除'));
+    row.appendChild(el('span', 'muted', '　' + j.clsName + ' · 已交 ' + gotN + '/' + j.students.length + ' · 本课共 ' + taskFull + ' 题，做对几题填几（0–' + taskFull + '），留空=清除'));
     card.appendChild(row);
+    card.appendChild(markLegend());
     const chipsBar = el('div');
     classChips(chipsBar, j.classes, j.clsName, (c) => lessonSheets(id, c));
     card.appendChild(chipsBar);
@@ -277,12 +362,43 @@
     }
     const table = el('table', 'tbl');
     const h = el('tr');
-    ['姓名', '本课小测', '学期累计', '最近保存', '提交内容', '赋分(0–10)', ''].forEach((x) => h.appendChild(el('th', null, x)));
+    ['姓名', '本课小测', '学期累计', '最近保存', '提交内容', '赋分(0–' + taskFull + ')', ''].forEach((x) => h.appendChild(el('th', null, x)));
     table.appendChild(h);
-    const cols = (j.sheet && j.sheet.cols) || [];
+    const sheetDef = j.sheet || null;
     j.students.forEach((s) => {
       const tr = el('tr');
-      tr.appendChild(el('td', null, s.name));
+      let detail = null;                       // 展开的「提交内容」行，跟着一起着色
+      // 赋分后当场算出这张证书会变成几%几星（口径同证书页：小测分+任务分 ÷ 题数+任务数）
+      // —— 老师以前看不到这个，打了低分也不知道会把学生的证书压下去
+      const certHint = el('div', 'muted');
+      certHint.style.fontSize = '11px'; certHint.style.marginTop = '2px';
+      const paintCert = () => {
+        if (s.score == null) { certHint.textContent = ''; return; }
+        const total = (s.lessonFull || 0) + taskFull;
+        const earned = (s.lessonQuiz || 0) + Math.min(s.score, taskFull);
+        const pct = total > 0 ? Math.min(100, Math.round(earned / total * 1000) / 10) : 0;
+        const stars = Math.round(pct / 20 * 10) / 10;
+        certHint.textContent = '证书 ' + pct.toFixed(1) + '% · ' + stars.toFixed(1) + ' 星';
+        certHint.style.color = pct >= 100 ? 'var(--green)' : pct >= 60 ? 'var(--ink-2)' : 'var(--bad)';
+      };
+      const nameTd = el('td', null, s.name);
+      const pill = el('span', 'pill', '');     // 状态标签：未交 / 未赋分 / 已赋分（跟整行底色一个颜色）
+      pill.style.marginLeft = '6px'; pill.style.fontSize = '11px';
+      nameTd.appendChild(pill);
+      tr.appendChild(nameTd);
+      // 状态配色随时刷新：赋分后橙→绿、清除后绿→橙，不用重开页面
+      const paint = () => {
+        const mk = markState(s);
+        [tr, detail].forEach((n) => {
+          if (!n) return;
+          n.classList.remove('row-miss', 'row-noscore', 'row-scored');
+          n.classList.add(mk.cls);
+        });
+        pill.className = 'pill ' + (mk.cls === 'row-noscore' ? 'warn' : mk.cls === 'row-scored' ? 'ok' : 'bad');
+        pill.textContent = mk.text;
+        paintCert();
+      };
+      paint();
       const qz = el('td');
       if (s.lessonQuiz != null) { qz.appendChild(el('b', null, String(s.lessonQuiz) + '/' + s.lessonFull)); }
       else qz.textContent = '—';
@@ -290,12 +406,11 @@
       const term = el('td'); term.className = 'sum-cell'; term.textContent = String(s.termScore || 0); tr.appendChild(term);
 
       // 提交内容（查看/收起）
-      let detail = null;
       const ct = el('td');
       const ctl = el('div', 'row-flex');
       if (s.submitted) {
         let open = false;
-        detail = el('tr'); detail.hidden = true; detail.appendChild(sheetDetailCell(s, cols));
+        detail = el('tr'); detail.hidden = true; detail.appendChild(sheetDetailCell(s, sheetDef));
         const v = el('button', 'btn ghost', '查看');
         v.style.padding = '2px 8px'; v.style.fontSize = '12px';
         v.onclick = () => { open = !open; detail.hidden = !open; v.textContent = open ? '收起' : '查看'; };
@@ -311,8 +426,9 @@
       const sc = el('td');
       const scWrap = el('div', 'row-flex');
       const inp = el('input', 'input score-in');
-      inp.type = 'number'; inp.min = '0'; inp.max = '10'; inp.step = '1'; inp.value = (s.score != null) ? String(s.score) : '';
-      inp.placeholder = s.score == null ? '0–10' : '';
+      inp.type = 'number'; inp.min = '0'; inp.max = String(taskFull); inp.step = '1';
+      inp.value = (s.score != null) ? String(s.score) : '';
+      inp.placeholder = s.score == null ? ('0–' + taskFull) : '';
       let saving = false;
       const commit = async () => {
         if (saving) return; saving = true;
@@ -324,6 +440,8 @@
           s.score = r.score;
           term.textContent = String(r.termScore || 0);
           inp.value = r.score == null ? '' : String(r.score);
+          inp.placeholder = r.score == null ? ('0–' + taskFull) : '';
+          paint();
           toast(r.score == null ? '已清除 ' + s.name + ' 的评分' : '已给 ' + s.name + ' 记 ' + r.score + ' 分');
         } catch (e) {
           inp.value = (s.score != null) ? String(s.score) : '';
@@ -343,6 +461,7 @@
       };
       scWrap.appendChild(inp); scWrap.appendChild(clearBtn);
       sc.appendChild(scWrap);
+      sc.appendChild(certHint);   // 「证书 X% · Y 星」，赋分后当场出现
       tr.appendChild(sc);
 
       // 删除该生提交内容（不影响评分）
