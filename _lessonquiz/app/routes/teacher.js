@@ -293,8 +293,64 @@ function register(router, { store, config }) {
     const saved = store.markStat(uid, lesson.id);
     ok(res, {
       score: saved ? saved.score : null,
+      scoredAt: saved ? (saved.at || null) : null,
       termScore: termOf(store, uid, stu.grade || gradeOfLesson(store, lesson.id)).total,
     });
+  });
+
+  // 批量赋分：一次给多位学生记同一个分（score 传 '' 则清除这些人的评分）。
+  // 用于「一屏勾一批人 → 统一记 X 分」，以及「没交的一律记 0 分」。
+  // 分数范围与单人赋分完全一致；传进来的 uid 不在名单里就跳过（不报错，返回 skipped）。
+  router.add('POST', '/api/teacher/sheet-board/:id/score-batch', async (req, res, ctx, params) => {
+    if (!requireTeacher(req, res, config)) return;
+    const lesson = store.findLesson(params.id);
+    if (!lesson) return fail(res, 404, '没有这份检测卷');
+    if (!lesson.sheet) return fail(res, 404, '本课没有课内任务单');
+    const body = await readBody(req, config.maxBodyMB * 1024 * 1024);
+    const uids = (Array.isArray(body.uids) ? body.uids : []).map((x) => String(x == null ? '' : x)).filter(Boolean);
+    if (!uids.length) return fail(res, 400, '没有选中学生');
+    if (uids.length > 500) return fail(res, 400, '一次最多 500 人');
+
+    const clear = body.score === '' || body.score === null || body.score === undefined;
+    const taskFull = sheetTaskCount(lesson.sheet); // 本课任务单共几题，满分就是几
+    let score = null;
+    if (!clear) {
+      score = Number(body.score);
+      if (!Number.isInteger(score) || score < 0 || score > taskFull) {
+        return fail(res, 400, '本课任务单共 ' + taskFull + ' 题，赋分需为 0–' + taskFull + ' 的整数（留空则清除评分）');
+      }
+    }
+
+    const rows = [];
+    let skipped = 0;
+    await store.mutate(() => {
+      const at = new Date().toISOString();
+      for (const uid of uids) {
+        const stu = store.findRoster(uid);
+        if (!stu) { skipped++; continue; }
+        let p = store.progress[uid];
+        if (!p) {
+          p = {
+            uid, name: stu.name, className: stu.className,
+            createdAt: at, lessons: {}, sheets: {}, marks: {},
+          };
+          store.progress[uid] = p;
+        }
+        if (!p.marks) p.marks = {};
+        if (clear) { delete p.marks[lesson.id]; }
+        else { p.marks[lesson.id] = { score, at }; }
+        p.name = stu.name; p.className = stu.className;
+        store.saveProgress(uid);
+        const saved = store.markStat(uid, lesson.id);
+        rows.push({
+          uid, name: stu.name,
+          score: saved ? saved.score : null,
+          scoredAt: saved ? (saved.at || null) : null,
+          termScore: termOf(store, uid, stu.grade || gradeOfLesson(store, lesson.id)).total,
+        });
+      }
+    });
+    ok(res, { updated: rows.length, skipped, score: clear ? null : score, rows });
   });
 
   // 期末汇总：按班每人一行（各课两格 + 小测小计 / 任务单小计 / 总分），含班级统计

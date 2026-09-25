@@ -322,17 +322,19 @@
     td.appendChild(box);
     return td;
   }
-  // 赋分台一眼看出来：红＝未交、橙＝未赋分、绿＝已赋分
+  // 赋分台一眼看出来：红＝还没处理、橙＝交了还没批、绿＝批完了
+  // 注意：给「没交」的学生记了分，那一行也算批完（变绿，标签写明「未交·记0分」）——
+  // 否则记了 0 分那行还是红的，老师根本看不出自己到底记上没有。
   function markState(s) {
-    if (!s.submitted) return { cls: 'row-miss', text: '未交' };
-    if (s.score == null) return { cls: 'row-noscore', text: '未赋分' };
-    return { cls: 'row-scored', text: '已赋分' };
+    if (s.score == null) return s.submitted ? { cls: 'row-noscore', text: '未赋分' } : { cls: 'row-miss', text: '未交' };
+    return { cls: 'row-scored', text: s.submitted ? '已赋分' : ('未交·记' + s.score + '分') };
   }
   function markLegend() {
     const w = el('div', 'mark-legend');
-    [['lg-miss', '红 = 未交'], ['lg-noscore', '橙 = 未赋分'], ['lg-scored', '绿 = 已赋分']].forEach((p) => {
+    [['lg-miss', '红 = 未交未赋分'], ['lg-noscore', '橙 = 交了待赋分'], ['lg-scored', '绿 = 已赋分']].forEach((p) => {
       w.appendChild(el('span', 'lg ' + p[0], p[1]));
     });
+    w.appendChild(el('span', 'muted', '　（没交的学生也能赋分，记完即变绿并标「未交·记0分」）'));
     w.appendChild(el('span', 'muted', '　（0 分也是分：输入 0 后按回车或点到别处即保存；「清除」才是撤销评分）'));
     return w;
   }
@@ -360,9 +362,86 @@
       card.appendChild(el('div', 'empty-note', '这个班还没有学生。'));
       body.appendChild(back); body.appendChild(card); return;
     }
+    // ---- 批量赋分：勾选 ＋ 批量条 ----
+    // 老师原话：「能不能批量打分，比如给未提交的学生，或者系统直接打0分也行」。
+    // 做法是勾选后统一记分，**不**做自动打 0：今天是没交，明天可能补交，
+    // 系统自作主张记下的 0 分是要算进期末积分的，得让老师看着时机自己按。
+    const picked = new Set();      // 选中的 uid
+    const boxes = [];              // 每行的勾选框，用来同步表头的「全选」
+    const byUid = {};              // uid → 就地刷新这一行（分数 / 赋分时间 / 学期累计）
+    const allCb = el('input'); allCb.type = 'checkbox'; allCb.title = '全选 / 全不选';
+    const bulkBar = el('div', 'bulk-bar');
+    const bulkN = el('span', 'bulk-n', '');
+    const bulkInp = el('input', 'input score-in');
+    bulkInp.type = 'number'; bulkInp.min = '0'; bulkInp.max = String(taskFull); bulkInp.step = '1';
+    bulkInp.placeholder = '0–' + taskFull; bulkInp.title = '批量要记的分数（0–' + taskFull + '）';
+    // 四个按钮各带一个稳定的 class：验收脚本按 class 找，不按会变的按钮文字找
+    const bulkApply = el('button', 'btn bulk-apply', '应用到选中');
+    const bulkClear = el('button', 'btn ghost bulk-clear', '清除选中评分');
+    const bulkZero = el('button', 'btn ghost bulk-zero', '');
+    const bulkNone = el('button', 'btn ghost bulk-none', '取消选择');
+    const zeroTargets = () => j.students.filter((x) => !x.submitted && x.score == null).map((x) => x.uid);
+    const refreshBulk = () => {
+      boxes.forEach((b) => { b.cb.checked = picked.has(b.uid); });
+      const n = picked.size;
+      allCb.checked = n > 0 && n === boxes.length;
+      allCb.indeterminate = n > 0 && n < boxes.length;
+      bulkN.textContent = n ? ('已选 ' + n + ' 人') : '勾选姓名前的方框即可批量赋分';
+      bulkApply.disabled = !n; bulkClear.disabled = !n; bulkNone.disabled = !n;
+      const zn = zeroTargets().length;
+      bulkZero.textContent = zn ? ('没交且没赋分的 ' + zn + ' 人 → 一律记 0 分') : '没交且没赋分的：0 个';
+      bulkZero.disabled = !zn;
+    };
+    const applyBatch = async (uids, score) => {
+      if (!uids.length) { toast('没有选中学生'); return; }
+      try {
+        const r = await api('/api/teacher/sheet-board/' + encodeURIComponent(id) + '/score-batch', 'POST', { uids, score });
+        (r.rows || []).forEach((x) => { const set = byUid[x.uid]; if (set) set(x.score, x.scoredAt, x.termScore); });
+        picked.clear(); refreshBulk();
+        let msg = (score === '') ? ('已清除 ' + r.updated + ' 人的评分') : ('已给 ' + r.updated + ' 人记 ' + score + ' 分');
+        if (r.skipped) msg += '（' + r.skipped + ' 人不在名单里，已跳过）';
+        toast(msg);
+      } catch (e) { toast('批量赋分失败：' + e.message); }
+    };
+    bulkApply.onclick = () => {
+      const v = bulkInp.value;
+      if (v === '') { toast('先在右边填一个分数（0–' + taskFull + '）'); return; }
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 0 || n > taskFull) { toast('本课任务单共 ' + taskFull + ' 题，请填 0–' + taskFull + ' 的整数'); return; }
+      applyBatch(Array.from(picked), n);
+    };
+    bulkClear.onclick = () => {
+      if (!confirm('清除选中的 ' + picked.size + ' 人在《' + j.lesson.title + '》的评分？')) return;
+      applyBatch(Array.from(picked), '');
+    };
+    bulkZero.onclick = () => {
+      const t = zeroTargets();
+      if (!t.length) { toast('本班没有「没交任务单且还没赋分」的学生'); return; }
+      if (!confirm('给本班 ' + t.length + ' 位没交任务单的学生一律记 0 分？\n（已经交了的、已经赋过分的都不会动）')) return;
+      applyBatch(t, 0);
+    };
+    bulkNone.onclick = () => { picked.clear(); refreshBulk(); };
+    allCb.onchange = () => {
+      const on = allCb.checked;
+      boxes.forEach((b) => { if (on) picked.add(b.uid); else picked.delete(b.uid); });
+      refreshBulk();
+    };
+    bulkBar.appendChild(bulkN);
+    bulkBar.appendChild(bulkZero);
+    bulkBar.appendChild(bulkNone);
+    bulkBar.appendChild(el('span', 'bulk-sp', '批量记分 '));
+    bulkBar.appendChild(bulkInp);
+    bulkBar.appendChild(bulkApply);
+    bulkBar.appendChild(bulkClear);
+    card.appendChild(bulkBar);
+
     const table = el('table', 'tbl');
     const h = el('tr');
-    ['姓名', '本课小测', '学期累计', '最近保存', '提交内容', '赋分(0–' + taskFull + ')', ''].forEach((x) => h.appendChild(el('th', null, x)));
+    const nameTh = el('th');
+    nameTh.appendChild(allCb);
+    nameTh.appendChild(el('span', null, ' 姓名'));
+    h.appendChild(nameTh);
+    ['本课小测', '学期累计', '最近保存', '提交内容', '赋分(0–' + taskFull + ')', ''].forEach((x) => h.appendChild(el('th', null, x)));
     table.appendChild(h);
     const sheetDef = j.sheet || null;
     j.students.forEach((s) => {
@@ -381,11 +460,21 @@
         certHint.textContent = '证书 ' + pct.toFixed(1) + '% · ' + stars.toFixed(1) + ' 星';
         certHint.style.color = pct >= 100 ? 'var(--green)' : pct >= 60 ? 'var(--ink-2)' : 'var(--bad)';
       };
-      const nameTd = el('td', null, s.name);
+      // 勾选框放在姓名格里（不新开一列），否则会把整行左侧那条状态色条挤到第二格去
+      const cb = el('input'); cb.type = 'checkbox'; cb.title = '勾选后可批量赋分';
+      cb.style.marginRight = '6px'; cb.style.verticalAlign = 'middle';
+      cb.onchange = () => { if (cb.checked) picked.add(s.uid); else picked.delete(s.uid); refreshBulk(); };
+      const nameTd = el('td');
+      nameTd.appendChild(cb);
+      nameTd.appendChild(document.createTextNode(s.name));
       const pill = el('span', 'pill', '');     // 状态标签：未交 / 未赋分 / 已赋分（跟整行底色一个颜色）
       pill.style.marginLeft = '6px'; pill.style.fontSize = '11px';
       nameTd.appendChild(pill);
       tr.appendChild(nameTd);
+      boxes.push({ uid: s.uid, cb });
+      // 赋分时间：老师按了回车到底记上没有，看一眼这里就知道（以前只有颜色，看不出记录时刻）
+      const stamped = el('div', 'muted');
+      stamped.style.fontSize = '11px'; stamped.style.marginTop = '2px';
       // 状态配色随时刷新：赋分后橙→绿、清除后绿→橙，不用重开页面
       const paint = () => {
         const mk = markState(s);
@@ -396,6 +485,7 @@
         });
         pill.className = 'pill ' + (mk.cls === 'row-noscore' ? 'warn' : mk.cls === 'row-scored' ? 'ok' : 'bad');
         pill.textContent = mk.text;
+        stamped.textContent = s.score == null ? '' : (s.scoredAt ? ('赋分于 ' + fmtT(s.scoredAt)) : '已赋分');
         paintCert();
       };
       paint();
@@ -430,6 +520,16 @@
       inp.value = (s.score != null) ? String(s.score) : '';
       inp.placeholder = s.score == null ? ('0–' + taskFull) : '';
       let saving = false;
+      // 单人赋分与批量赋分共用的落地点：把分数写回这一行（输入框 / 赋分时间 / 学期累计 / 行底色一起刷）
+      const applyScore = (score, scoredAt, termScore) => {
+        s.score = score;
+        if (scoredAt !== undefined) s.scoredAt = scoredAt;
+        inp.value = score == null ? '' : String(score);
+        inp.placeholder = score == null ? ('0–' + taskFull) : '';
+        if (termScore != null) term.textContent = String(termScore);
+        paint();
+      };
+      byUid[s.uid] = applyScore;
       const commit = async () => {
         if (saving) return; saving = true;
         const v = inp.value;
@@ -437,11 +537,7 @@
         if (v === '' && s.score == null) { saving = false; return; }
         try {
           const r = await api('/api/teacher/sheet-board/' + encodeURIComponent(id) + '/score', 'POST', { uid: s.uid, score: doClear ? '' : Number(v) });
-          s.score = r.score;
-          term.textContent = String(r.termScore || 0);
-          inp.value = r.score == null ? '' : String(r.score);
-          inp.placeholder = r.score == null ? ('0–' + taskFull) : '';
-          paint();
+          applyScore(r.score, r.scoredAt, r.termScore);
           toast(r.score == null ? '已清除 ' + s.name + ' 的评分' : '已给 ' + s.name + ' 记 ' + r.score + ' 分');
         } catch (e) {
           inp.value = (s.score != null) ? String(s.score) : '';
@@ -461,6 +557,7 @@
       };
       scWrap.appendChild(inp); scWrap.appendChild(clearBtn);
       sc.appendChild(scWrap);
+      sc.appendChild(stamped);    // 「赋分于 9/22 15:41」
       sc.appendChild(certHint);   // 「证书 X% · Y 星」，赋分后当场出现
       tr.appendChild(sc);
 
@@ -480,9 +577,13 @@
       table.appendChild(tr);
       if (detail) table.appendChild(detail);
     });
-    card.appendChild(table);
+    // 套一层横向滚动：窄屏（最小 500px）下宁可横着滑，也别把姓名和标签挤成两行一个字
+    const scroll = el('div', 'tbl-scroll');
+    scroll.appendChild(table);
+    card.appendChild(scroll);
     body.appendChild(back);
     body.appendChild(card);
+    refreshBulk();   // 行都建好了，这时才数得出「已选几人 / 没交的几人」
   }
 
   // ---------- 期末汇总（按班：每课两格 + 三合计，0 分照常计入） ----------
