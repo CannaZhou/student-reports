@@ -81,21 +81,54 @@
     return svgEl('rect', { x: cx - w / 2, y: cy - h / 2, width: w, height: h, rx, ry: rx });
   }
 
-  // 流程图按原始清晰尺寸显示；容器 .fc-scroll 提供横向滚动。
+  // 流程图等比缩放“塞进”容器，尽量一屏看全，不用左右滑：
+  //   主看宽度（容器多宽就缩到多宽），顺带限制高度——允许略高于一屏（1.35 屏），
+  //   但绝不为“一屏”把字缩到看不清。整体缩放，所以字、框、间距同步缩，不会错位。
+  // 容器宽度必须是 100% 而不是写死 cw：写死的话容器自己就被撑到 cw 宽、整页跟着横滑。
+  const MIN_SCALE = 0.5;
+  const H_SCREENS = 1.35;   // 缩放后最高不超过窗口高的 1.35 倍
   function applyScale(wrap, holder, cw, ch) {
-    holder.style.transform = 'none';
-    wrap.style.width = cw + 'px';
-    wrap.style.height = ch + 'px';
+    wrap.style.width = '100%';
+    wrap.style.maxWidth = '100%';
+    // 视图隐藏时量不到宽度（clientWidth 为 0），此时先按原尺寸显示，等 show()/resize 再校准
+    const availW = wrap.clientWidth || (wrap.parentElement ? wrap.parentElement.clientWidth : 0) || 0;
+    let k = 1;
+    if (availW > 0) {
+      const availH = Math.max(360, (global.innerHeight || 800) * H_SCREENS);
+      k = Math.min(1, availW / cw, availH / ch);
+      if (k < MIN_SCALE) k = MIN_SCALE;
+    }
+    const dx = Math.max(0, Math.round((availW - cw * k) / 2)); // 缩小后居中，别靠左留一片空
+    holder.style.transformOrigin = 'top left';
+    holder.style.transform = (k < 1 || dx > 0) ? 'translate(' + dx + 'px,0) scale(' + k + ')' : 'none';
+    wrap.style.height = Math.round(ch * k) + 'px';
+    // 缩得下就把横向滚动条藏掉；窄到下限都装不下才允许左右滑
+    wrap.style.overflowX = (cw * k > availW + 1) ? 'auto' : 'hidden';
+    wrap.dataset.k = k;
+    return k;
   }
-  // 页面显示后重设尺寸（若将来启用缩放，在此处按 host 实际宽度重算）
+  // 视图显示后 / 窗口尺寸变化后重算缩放
   function fit(host) {
-    const wrap = host && host.firstElementChild;
+    if (!host) return;
+    // 传进来的是外层宿主（host.firstElementChild 是 .fc-scroll）或 .fc-scroll 本身，都认
+    const wrap = (host.classList && host.classList.contains('fc-scroll')) ? host : host.firstElementChild;
     if (!wrap || !wrap.classList.contains('fc-scroll')) return;
     const holder = wrap.firstElementChild;
     if (!holder) return;
     const cw = Number(holder.dataset.cw) || 860;
     const ch = Number(holder.dataset.ch) || 1000;
     applyScale(wrap, holder, cw, ch);
+  }
+  // 手机横竖屏/窗口大小变化时跟着重算（只处理量得到宽度的那些）
+  let resizeBound = false;
+  function bindResize() {
+    if (resizeBound || !global.addEventListener) return;
+    resizeBound = true;
+    global.addEventListener('resize', () => {
+      document.querySelectorAll('.fc-scroll').forEach((w) => {
+        if (w.clientWidth > 0) fit(w.parentElement);
+      });
+    });
   }
 
   // opts: { mode:'answer'|'result', values:{key:val}, blanksState:[{key,ok,got,correct,expl}], onChange(key,val) }
@@ -111,8 +144,9 @@
     holder.dataset.cw = cw;
     holder.dataset.ch = ch;
     wrap.appendChild(holder);
+    host.appendChild(wrap);          // 先上屏再量宽度，否则 clientWidth 为 0 算不出缩放
     applyScale(wrap, holder, cw, ch);
-    host.appendChild(wrap);
+    bindResize();
 
     // ---- SVG 层：连线(先) + 节点外框(后) ----
     const svg = svgEl('svg', { viewBox: '0 0 ' + cw + ' ' + ch, width: cw, height: ch });
