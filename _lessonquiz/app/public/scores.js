@@ -54,11 +54,11 @@
           });
           if (!(r.recent || []).length) hd.appendChild(document.createTextNode('—'));
           row.appendChild(hd);
-          // 任务单老师评分：评过显 数字/10；交过未评显 待评分；无任务单/没交显 —
+          // 任务单老师评分：评过显 做对题数/总题数；交过未评显 待评分；无任务单/没交显 —
           const tk = el('td', null);
           if (r.hasSheet) {
             if (r.task != null) {
-              const b = el('b', null, String(r.task) + ' / 10');
+              const b = el('b', null, String(r.task) + ' / ' + (r.taskFull || 1) + ' 题');
               if (r.taskAt) b.title = '评于 ' + new Date(r.taskAt).toLocaleString('zh-CN');
               tk.appendChild(b);
             } else if (r.sheetSubmitted) {

@@ -6,6 +6,7 @@ const sessions = require('../core/sessions.js');
 const { lessonName, publicQuestion, publicSheet, sheetRowSpecs, buildCatalog } = require('../core/catalog.js');
 const { gradeBasic, gradeBlanks, blankListOf } = require('../core/grade.js');
 const { evalLesson, issueIfReady, buildCertWall, certBrief, certToast, whereOf } = require('../core/cert.js');
+const { sheetTaskCount } = require('../core/lesson.js'); // 任务单满分 = 这一课有几题
 
 function studentOf(sess, store) {
   if (!sess || sess.role !== 'student') return null;
@@ -258,7 +259,7 @@ function register(router, { store, config }) {
     });
   });
 
-  // 本人成绩：按本年级课序一行一课，各含 小测积分 与 任务单老师评分(0–10)
+  // 本人成绩：按本年级课序一行一课，各含 小测积分 与 任务单老师评分（0–任务数）
   router.add('GET', '/api/student/scores', (req, res) => {
     const stu = studentOf(readSession(req, config), store);
     if (!stu) return fail(res, 401, '未登录');
@@ -295,6 +296,7 @@ function register(router, { store, config }) {
         attempts: st ? (st.attempts || []).length : 0,
         recent: st ? st.attempts.slice(-8).reverse().map((a) => ({ at: a.at, score: a.score, full: a.full })) : [],
         task: marked ? m.score : null,                           // 未评为 null（与给了 0 区分）
+        taskFull: l.sheet ? sheetTaskCount(l.sheet) : 0,         // 任务单满分 = 这一课有几题
         taskAt: marked ? (m.at || null) : null,
         sheetSubmitted: submitted,
         cert: certBrief(store, stu.uid, l), // {issued, pending, pct, stars, issuedAt, missing}

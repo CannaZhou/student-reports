@@ -6,4 +6,13 @@ function lessonName(l) {
   return (l.no ? '第' + l.no + '课 ' : '') + (l.title || '');
 }
 
-module.exports = { lessonName };
+// 课内任务单有「几题」（=几个板块）：老师按「一题 1 分、做对几题得几分」打分，
+// 所以这就是任务单的满分，证书里也拿它当分母（2026-09-25 老师口径）。
+// 单表结构（没有 sections）算 1 题；某课想改口就写 sheet.taskCount 显式覆盖。
+function sheetTaskCount(sheet) {
+  if (!sheet) return 0;
+  if (typeof sheet.taskCount === 'number' && sheet.taskCount > 0) return sheet.taskCount;
+  return (sheet.sections && sheet.sections.length) || 1;
+}
+
+module.exports = { lessonName, sheetTaskCount };

@@ -1,12 +1,13 @@
 // 一课一证书：做完一课的任务就颁发本课「学业证书」，带综合评价
-// 综合评价口径（2026-09-23 与老师确认）：
-//   满分 = 题数 + (有任务单 ? 10 : 0)   得分 = 小测最高分（自动批改的客观题） + 老师评分（任务单，主观题 0–10）
+// 综合评价口径（2026-09-25 与老师确认）：
+//   满分 = 小测题数 + 任务单题数   得分 = 小测最高分（自动批改的客观题） + 老师评分
+//   ⚠️ 任务单不是 0–10 分制，而是「一题 1 分、做对几题得几分」，满分 = 这一课的任务数
+//      （第2课 1 题 → 满分 1；第3课 2 题 → 满分 2；第4课 6 题 → 满分 6）。老师给 1 分就是做对 1 题。
+//      这分最后还要并进学生积分，所以不能改成 10 分制。
 //   任务单交了但老师还没批 → 先发证，星级暂按客观题单独算（pending=true），老师批完下次打开自动重算
 // 发证条件：小测已交；有任务单的课还要任务单已交
 // 评价语分档：100% / ≥60% / >0% / 未完成（原话见 BANDS 与 UNDONE）
-const { lessonName } = require('./lesson.js'); // 课名走叶子模块：catalog.js 顶层要本模块，反向 require 会成环
-
-const TASK_FULL = 10; // 课内任务单满分（老师评 0–10）
+const { lessonName, sheetTaskCount } = require('./lesson.js'); // 课名/任务数走叶子模块：catalog.js 顶层要本模块，反向 require 会成环
 
 // 综合评价分档（pct 从高到低命中第一条）
 const BANDS = [
@@ -67,8 +68,10 @@ function evalLesson(store, stu, lesson) {
   const hasSheet = !!lesson.sheet;
   const sheetDone = !!(sh && (sh.attempts || []).length);
   const taskMarked = !!(mk && typeof mk.score === 'number');         // 老师批过（0 分也算批过）
-  const taskScore = taskMarked ? mk.score : null;
-  const taskFull = hasSheet ? TASK_FULL : 0;
+  const taskFull = hasSheet ? sheetTaskCount(lesson.sheet) : 0;      // 任务单满分 = 这一课有几题
+  // 历史脏数据兜底：早期按 0–10 打分时出现过超出任务数的分（如四上第1课 1 题却打了 3 分），
+  // 计算时封顶到任务数，别让 pct 冲过 100%
+  const taskScore = taskMarked ? Math.max(0, Math.min(mk.score, taskFull)) : null;
   const pending = hasSheet && sheetDone && !taskMarked;              // 先发证：主观题待老师批阅
 
   const missing = [];
@@ -77,7 +80,7 @@ function evalLesson(store, stu, lesson) {
   // 题数为 0 的脏课不发证（否则分母为 0、证书上全是 NaN）
   const issued = missing.length === 0 && quizFull > 0;
 
-  // 综合得分：待批阅时只按客观题算（分母不含任务单那 10 分）
+  // 综合得分：待批阅时只按客观题算（分母不含任务单那几题）
   let earned, total;
   if (pending) { earned = quizScore; total = quizFull; }
   else { earned = quizScore + (taskMarked ? taskScore : 0); total = quizFull + taskFull; }
@@ -182,6 +185,6 @@ function certToast(ev) {
 }
 
 module.exports = {
-  TASK_FULL, BANDS, UNDONE,
+  BANDS, UNDONE,
   evalLesson, issueIfReady, buildCertWall, certBrief, certToast, serialOf, lessonTitle, whereOf,
 };

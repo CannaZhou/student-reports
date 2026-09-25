@@ -5,6 +5,7 @@ const {
 const sessions = require('../core/sessions.js');
 const { verifyPassword, hashPassword } = require('../core/passwd.js');
 const { lessonName, publicSheet } = require('../core/catalog.js');
+const { sheetTaskCount } = require('../core/lesson.js'); // 任务单满分 = 这一课有几题（老师按"做对几题得几分"打）
 
 function isTeacher(sess) { return !!(sess && sess.role === 'teacher'); }
 function requireTeacher(req, res, config) {
@@ -206,7 +207,8 @@ function register(router, { store, config }) {
     ok(res, { lesson: { id: lesson.id, title: lessonName(lesson), full: (lesson.questions || []).length, grade: gradeOfLesson(store, params.id) }, rows });
   });
 
-  // 某课「课内任务单」赋分台：按班看整班学生（含未交），每人带【本课小测分】【全学期累计分】，可评 0–10
+  // 某课「课内任务单」赋分台：按班看整班学生（含未交），每人带【本课小测分】【全学期累计分】，
+  // 可评 0–任务数（一题 1 分，做对几题得几分）
   router.add('GET', '/api/teacher/sheet-board/:id', (req, res, ctx, params, url) => {
     if (!requireTeacher(req, res, config)) return;
     const lesson = store.findLesson(params.id);
@@ -243,7 +245,7 @@ function register(router, { store, config }) {
     const sub = students.filter((r) => r.submitted).sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
     const nsub = students.filter((r) => !r.submitted).sort((a, b) => a.name.localeCompare(b.name, 'zh'));
     ok(res, {
-      lesson: { id: lesson.id, title: lessonName(lesson), grade: lessonGrade, full },
+      lesson: { id: lesson.id, title: lessonName(lesson), grade: lessonGrade, full, taskFull: sheetTaskCount(lesson.sheet) },
       sheet: publicSheet(lesson.sheet),
       classes: classes.map((c) => ({ name: c.name, count: c.count })),
       clsName,
@@ -251,7 +253,7 @@ function register(router, { store, config }) {
     });
   });
 
-  // 给某生某课「任务单」评分：score 为 0–10 整数（含 0）；传 '' 清除该条评分
+  // 给某生某课「任务单」评分：score 为 0–任务数 的整数（含 0；一题 1 分，做对几题得几分）；传 '' 清除该条评分
   router.add('POST', '/api/teacher/sheet-board/:id/score', async (req, res, ctx, params) => {
     if (!requireTeacher(req, res, config)) return;
     const lesson = store.findLesson(params.id);
@@ -263,11 +265,12 @@ function register(router, { store, config }) {
     if (!stu) return fail(res, 404, '名单里没有这位学生');
 
     const clear = body.score === '' || body.score === null || body.score === undefined;
+    const taskFull = sheetTaskCount(lesson.sheet); // 本课任务单共几题，满分就是几
     let score = null;
     if (!clear) {
       score = Number(body.score);
-      if (!Number.isInteger(score) || score < 0 || score > 10) {
-        return fail(res, 400, '赋分需为 0–10 的整数（留空则清除评分）');
+      if (!Number.isInteger(score) || score < 0 || score > taskFull) {
+        return fail(res, 400, '本课任务单共 ' + taskFull + ' 题，赋分需为 0–' + taskFull + ' 的整数（留空则清除评分）');
       }
     }
 

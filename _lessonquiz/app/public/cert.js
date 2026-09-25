@@ -133,7 +133,7 @@
       mid.appendChild(el('div', 'cw-cmt', it.comment));
       const sub = el('div', 'cw-sub');
       const parts = ['课后小测 ' + it.quizScore + '/' + it.quizFull + ' 题'];
-      if (it.hasSheet) parts.push(it.taskMarked ? ('任务单 ' + it.taskScore + '/10 分') : '任务单 待批阅');
+      if (it.hasSheet) parts.push(it.taskMarked ? ('任务单 ' + it.taskScore + '/' + it.taskFull + ' 题') : '任务单 待批阅');
       sub.textContent = parts.join('　·　') + (it.issuedAt ? '　·　' + fmtDate(it.issuedAt) + ' 颁发' : '');
       mid.appendChild(sub);
     } else {
@@ -344,7 +344,7 @@
 
     // 得分明细
     const parts = ['课后小测 ' + item.quizScore + ' / ' + item.quizFull + ' 题'];
-    if (item.hasSheet) parts.push(item.taskMarked ? ('课内任务单 ' + item.taskScore + ' / 10 分') : '课内任务单 待老师批阅');
+    if (item.hasSheet) parts.push(item.taskMarked ? ('课内任务单 ' + item.taskScore + ' / ' + item.taskFull + ' 题') : '课内任务单 待老师批阅');
     T(parts.join('　·　'), W / 2, BY + BH + 52, F(23, 400), INK2);
     if (item.pending) {
       T('老师批阅任务单后，综合评价会自动更新', W / 2, BY + BH + 94, F(20, 400), '#a3ada5');
@@ -360,6 +360,9 @@
     window.__cert = {
       text: [item.title, stu.name, stu.className, item.comment, item.stars.toFixed(1), item.pct.toFixed(1), item.serial].join('|'),
       issued: item.issued, pending: item.pending, w: cv.width, h: cv.height,
+      // 明细行（证书底下那行「课后小测 x/y 题 · 课内任务单 a/b 题」），验收要断任务单分母
+      quiz: item.quizScore + '/' + item.quizFull,
+      task: item.hasSheet ? (item.taskMarked ? item.taskScore + '/' + item.taskFull : 'pending') : null,
     };
     window.__certBlob = () => new Promise((r) => cv.toBlob((b) => r(b), 'image/png'));
   }

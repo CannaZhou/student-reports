@@ -176,6 +176,43 @@ function mk(ws) {
   const cta2 = await ev("(function(){var c=document.querySelector('#resultBody .cert-cta');return c?c.textContent:'';})()");
   ok(cta2.indexOf('还差') >= 0, '任务单没交时结果页提示：' + cta2.slice(0, 40));
 
+  // ---- 7. 老师赋分台：打"做对几题"，并当场显示证书结果 ----
+  // 以前老师看不到分数对证书的影响，给 1 分（1 题任务单的满分）却以为学生没做好
+  await go(BASE + '/teacher');
+  await ev("document.getElementById('pw').value='123456';document.getElementById('loginGo').click();");
+  await sleep(1000);
+  await ev("document.querySelector('.tab[data-tab=\"overview\"]').click()");
+  await sleep(1200);
+  await ev("(function(){var tr=[].filter.call(document.querySelectorAll('tr'),function(r){return r.textContent.indexOf('第3课')>=0;})[0];var b=[].filter.call(tr.querySelectorAll('.btn'),function(x){return x.textContent.indexOf('课内任务单')>=0;})[0];b.click();})()");
+  await sleep(1200);
+  // 切到本测试学生所在的班（默认可能是别的班）
+  await ev("(function(){var c=[].filter.call(document.querySelectorAll('.cls-chip'),function(x){return x.textContent.indexOf('六年级UI证书班')>=0;})[0];if(c&&!c.classList.contains('on'))c.click();})()");
+  await sleep(1200);
+  const board = await ev("(function(){var b=document.getElementById('tabBody');var th=[].map.call(b.querySelectorAll('th'),function(x){return x.textContent;});var inp=b.querySelector('input.score-in');return {head:th.join('|'),max:inp&&inp.max,ph:inp&&inp.placeholder,has:!!inp};})()");
+  ok(board.has, '赋分台打开，有分数输入框');
+  ok(board.head.indexOf('赋分(0–2)') >= 0, '表头写着本课任务单共 2 题：' + board.head);
+  ok(board.max === '2', '输入框上限 = 任务数（' + board.max + '）');
+  ok(board.ph === '0–2', '占位提示 0–2：' + board.ph);
+  // 给测试学生打满分（2 题全对）→ 该行应出现「证书 100.0% · 5.0 星」
+  const hint = await ev("(function(){var tr=[].filter.call(document.querySelectorAll('tr'),function(r){return r.textContent.indexOf(" + JSON.stringify(NAME) + ")>=0;})[0];var i=tr.querySelector('input.score-in');i.value='2';i.dispatchEvent(new Event('change',{bubbles:true}));return true;})()");
+  ok(hint === true, '给 ' + NAME + ' 打 2 分（做对 2/2 题）');
+  await sleep(1400);
+  const after = await ev("(function(){var tr=[].filter.call(document.querySelectorAll('tr'),function(r){return r.textContent.indexOf(" + JSON.stringify(NAME) + ")>=0;})[0];return tr?tr.textContent:'';})()");
+  ok(after.indexOf('证书 100.0% · 5.0 星') >= 0, '赋分台当场显示证书结果：' + (after.match(/证书[^\n]{0,16}/) || [''])[0]);
+  // 学生端证书也应立刻变成 100%（老师批完自动更新）
+  // 注意：刚才在同一个浏览器里登了教师端，会话 cookie 已被换成教师的 —— 直接把开头的学生会话注回去，
+  // 别再走一遍表单登录（表单登录会被教师会话挡着，页面停在登录卡上，__cert 根本没画出来）
+  const [cn, cv] = [S.split('=')[0], S.split('=').slice(1).join('=')];
+  await send('Network.enable');
+  await send('Network.setCookie', { name: cn, value: cv, url: BASE });
+  await go(BASE + '/cert?lesson=' + LID);
+  await sleep(900);
+  const after2 = await ev("window.__cert ? window.__cert.text : ''");
+  const afterMeta = await ev("window.__cert ? {quiz:window.__cert.quiz,task:window.__cert.task} : null");
+  ok(after2.indexOf('|100.0|') >= 0, '老师批完后学生证书即时变为 100%（__cert=' + after2 + '）');
+  ok(afterMeta && afterMeta.quiz === '5/5', '明细：小测 5/5 题');
+  ok(afterMeta && afterMeta.task === '2/2', '明细：课内任务单 2/2 题（分母是任务数，不是 10）');
+
   // ---- 清理 ----
   ws.close(); child.kill();
   await jfetch('/api/teacher/progress/delete', 'POST', { uid: NAME + '｜' + CLA }, T);

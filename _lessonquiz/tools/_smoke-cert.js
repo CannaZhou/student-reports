@@ -22,6 +22,7 @@ async function jfetch(p, method, body, ck) {
 }
 
 // 从 content.json 里取标准答案，凑一份满分答案（用来把学生的分数钉死在已知值上）
+const { sheetTaskCount } = require(path.join(APP, 'core', 'lesson.js'));
 const CONTENT = JSON.parse(fs.readFileSync(path.join(APP, 'data', 'content.json'), 'utf8'));
 function findLesson(id) {
   for (const g of CONTENT.grades || []) for (const u of g.units || []) for (const l of u.lessons || []) if (l.id === id) return l;
@@ -56,8 +57,10 @@ const SHEET_ROW = (id) => (hasSheet(id) ? [{ _i: 0, lab: '烟雾自检', c1: '1'
   const S = {};
   for (const n of [A, B, C, D]) S[n] = (await jfetch('/api/student/login', 'POST', { name: n })).ck;
 
-  const L1 = '6-1-3';                 // 有任务单：5 题 + 10 分
-  const L2 = '6-1-1';                 // 无任务单：5 题
+  const L1 = '6-1-3';                 // 任务单 2 题：5 题小测 + 2 题任务单，满分 7
+  const L2 = '6-1-1';                 // 无任务单：5 题，满分 5
+  const L3 = '6-1-2';                 // 任务单 1 题：5 题小测 + 1 题任务单，满分 6
+  const taskFullOf = (id) => ((findLesson(id) || {}).sheet ? sheetTaskCount(findLesson(id).sheet) : 0);
   const lid = (n) => (n === C ? L2 : L1);
   const lc = findLesson(L1);
 
@@ -91,27 +94,69 @@ const SHEET_ROW = (id) => (hasSheet(id) ? [{ _i: 0, lab: '烟雾自检', c1: '1'
   const firstAt = disk.certs && disk.certs[L1] && disk.certs[L1].firstAt;
   ok(!!firstAt, 'p.certs[' + L1 + '].firstAt 已写入');
 
-  console.log('\n-- 5. 锚点：老师评 8 分 → (5+8)/15 = 86.7% → 4.3 星「作业完成较好」');
-  await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 8 }, T);
+  // 任务单满分 = 本课任务数（老师口径：一题 1 分，做对几题得几分）
+  console.log('\n-- 4b. 任务单满分就是"这一课有几题"');
+  eq(taskFullOf(L1), 2, L1 + ' 的任务单满分');
+  eq(taskFullOf(L3), 1, L3 + ' 的任务单满分');
+  eq(taskFullOf(L2), 0, L2 + '（无任务单）满分 0');
+  r = await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 3 }, T);
+  eq(r.status, 400, '超过任务数（2 题却给 3 分）被拒：' + (r.j.error && r.j.error.msg));
+  r = await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 2 }, T);
+  eq(r.status, 200, '正好等于任务数 2 分可以');
+
+  console.log('\n-- 5. 锚点：做对 1/2 题 → (5+1)/7 = 85.7% → 4.3 星「作业完成较好」');
+  await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 1 }, T);
   r = await jfetch('/api/student/certs/' + L1, 'GET', null, S[A]);
   const it = r.j.item;
   eq(it.pending, false, 'pending=false');
-  eq(it.pct, 86.7, 'pct=86.7');
+  eq(it.taskFull, 2, 'taskFull=2');
+  eq(it.pct, 85.7, 'pct=(5+1)/7=85.7');
   eq(it.stars, 4.3, 'stars=4.3');
   eq(it.level, 'good', 'level=good');
   eq(it.comment, '作业完成较好，细节仍需改善', '评价语');
   eq(it.issuedAt, firstAt, '发证时间不因批阅而变');
   ok(/^LXQ-6-1-3-[0-9A-F]{6}$/.test(it.serial), '证书编号格式 ' + it.serial);
 
-  console.log('\n-- 6. 评 10 分 → 100%「作业做得很棒」；评 0 分 → 33.3%');
-  await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 10 }, T);
+  console.log('\n-- 6. 做对 2/2 题 → 100%「作业做得很棒」；做对 0/2 → 5/7 = 71.4% 仍是「作业完成较好」');
+  await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 2 }, T);
   r = await jfetch('/api/student/certs/' + L1, 'GET', null, S[A]);
-  eq(r.j.item.pct, 100, '满分 pct=100');
+  eq(r.j.item.pct, 100, '小测满分+任务单满分 = 100');
   eq(r.j.item.comment, '作业做得很棒，希望你继续保持', '满分评价语');
   await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 0 }, T);
   r = await jfetch('/api/student/certs/' + L1, 'GET', null, S[A]);
-  eq(r.j.item.pct, 33.3, '小测满分+任务单0分 = 5/15 = 33.3');
-  eq(r.j.item.comment, '作业错误较多，老师期待你的进步', '低分评价语');
+  eq(r.j.item.pct, 71.4, '小测满分+任务单0分 = 5/7 = 71.4');
+  eq(r.j.item.comment, '作业完成较好，细节仍需改善', '71.4% 属 ≥60% 档');
+
+  console.log('\n-- 6b. 「作业错误较多」档：小测只对 3/5 + 任务单 1/2 → 4/7 = 57.1%');
+  const E = '证书偏低' + TAG;
+  await jfetch('/api/teacher/roster', 'POST', { text: CLA + '，' + E }, T);
+  const SE = (await jfetch('/api/student/login', 'POST', { name: E })).ck;
+  const partial = fullAnswers(lc);
+  // 只答对前 3 题：把后两题改成空答案（判 0 分）
+  Object.keys(partial).slice(3).forEach((k) => { partial[k] = { ans: '', blanks: {} }; });
+  await jfetch('/api/lesson/' + L1 + '/submit', 'POST', { answers: partial }, SE);
+  await jfetch('/api/lesson/' + L1 + '/sheet/submit', 'POST', { rows: SHEET_ROW(L1) }, SE);
+  await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: E + '｜' + CLA, score: 1 }, T);
+  r = await jfetch('/api/student/certs/' + L1, 'GET', null, SE);
+  const et = r.j.item;
+  eq(et.quizScore, 3, '小测 3/5');
+  eq(et.pct, 57.1, 'pct=(3+1)/7=57.1');
+  eq(et.stars, 2.9, 'stars=2.9');
+  eq(et.comment, '作业错误较多，老师期待你的进步', '低于 60% 的评价语');
+
+  console.log('\n-- 6c. 陶然那种课（1 题任务单）：小测满分 + 任务做对 1/1 → 100%');
+  const F = '证书单题' + TAG;
+  await jfetch('/api/teacher/roster', 'POST', { text: CLA + '，' + F }, T);
+  const SF = (await jfetch('/api/student/login', 'POST', { name: F })).ck;
+  await jfetch('/api/lesson/' + L3 + '/submit', 'POST', { answers: fullAnswers(findLesson(L3)) }, SF);
+  await jfetch('/api/lesson/' + L3 + '/sheet/submit', 'POST', { rows: SHEET_ROW(L3) }, SF);
+  r = await jfetch('/api/lesson/' + L3 + '/sheet/submit', 'POST', { rows: SHEET_ROW(L3) }, SF);
+  eq(r.j.cert.pct, 100, '待批阅时先按客观题 100');
+  await jfetch('/api/teacher/sheet-board/' + L3 + '/score', 'POST', { uid: F + '｜' + CLA, score: 1 }, T);
+  r = await jfetch('/api/student/certs/' + L3, 'GET', null, SF);
+  eq(r.j.item.taskFull, 1, '1 题任务单');
+  eq(r.j.item.pct, 100, '小测满分 + 做对 1/1 题 = (5+1)/6 = 100%');
+  eq(r.j.item.comment, '作业做得很棒，希望你继续保持', '仍是最优评语');
 
   console.log('\n-- 7. 老师清除评分 → 回到待批阅口径，证书不撤回');
   await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: '' }, T);
@@ -169,7 +214,7 @@ const SHEET_ROW = (id) => (hasSheet(id) ? [{ _i: 0, lab: '烟雾自检', c1: '1'
   ok(buildCertWall(st2, stu2).items.length >= 1, '证书墙正常');
 
   console.log('\n-- 清理测试数据');
-  for (const n of [A, B, C, D]) {
+  for (const n of [A, B, C, D, E, F]) {
     await jfetch('/api/teacher/progress/delete', 'POST', { uid: n + '｜' + CLA }, T);
     await jfetch('/api/teacher/roster/delete', 'POST', { uid: n + '｜' + CLA }, T);
   }
