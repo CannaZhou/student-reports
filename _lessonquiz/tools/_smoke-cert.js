@@ -99,6 +99,13 @@ const SHEET_ROW = (id) => (hasSheet(id) ? [{ _i: 0, lab: '烟雾自检', c1: '1'
   eq(taskFullOf(L1), 2, L1 + ' 的任务单满分');
   eq(taskFullOf(L3), 1, L3 + ' 的任务单满分');
   eq(taskFullOf(L2), 0, L2 + '（无任务单）满分 0');
+  // 满分不是从结构自动推的，是老师心里的评分单位：
+  //   4-1-1 只有 1 个板块但 3 行，老师"写对一条得 1 分" → 3（评分单位＝行）
+  //   6-1-4 有 6 个板块但只算 3 个任务        → 3（评分单位＝任务）
+  // 两课都靠 sheet.taskCount 显式覆盖，别把它们"自动纠正"回 1 / 6
+  eq(taskFullOf('4-1-1'), 3, '4-1-1 是 1 板块 3 行，按行给分 → 满分 3（taskCount 覆盖）');
+  eq(taskFullOf('6-1-4'), 3, '6-1-4 是 6 板块 3 个任务，按任务给分 → 满分 3（taskCount 覆盖）');
+  eq(taskFullOf('4-1-2'), 3, '4-1-2 三个活动各 1 分 → 满分 3（默认取板块数）');
   r = await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 3 }, T);
   eq(r.status, 400, '超过任务数（2 题却给 3 分）被拒：' + (r.j.error && r.j.error.msg));
   r = await jfetch('/api/teacher/sheet-board/' + L1 + '/score', 'POST', { uid: A + '｜' + CLA, score: 2 }, T);
