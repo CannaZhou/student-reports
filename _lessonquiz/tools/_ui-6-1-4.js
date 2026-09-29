@@ -32,7 +32,7 @@ function mk(ws) {
   await jfetch('/api/teacher/roster', 'POST', { text: [ME, B].map((n) => CLA + '，' + n).join('\n') }, T);
   // 乙交过本课任务单，用来验证左栏名单（与 _ui-mates 同一口径）
   const SB = (await jfetch('/api/student/login', 'POST', { name: B })).ck;
-  await jfetch('/api/lesson/6-1-4/sheet/submit', 'POST', { rows: [{ _i: 0, prog: '计算器', func: '算数', feel: '很快' }] }, SB);
+  await jfetch('/api/lesson/6-1-4/sheet/submit', 'POST', { rows: [{ _i: 0, prog: '在线打字', func: '算数', feel: '很快' }] }, SB);
 
   const S = (await jfetch('/api/student/login', 'POST', { name: ME })).ck;
 
@@ -137,11 +137,22 @@ function mk(ws) {
       out.push({ col:s.dataset.col, opts:[].slice.call(s.options).filter(function(o){return o.value}).map(function(o){return o.value}) });
     });
     return out;})()`);
-  ok(sels.length === 8, '连线一共 8 个下拉框（运算符 4 + 比较运算符 4，实际 ' + sels.length + '）');
+  ok(sels.length === 20, '下拉框共 20 个（任务一 4 行 × 3 列 = 12 + 连线 8，实际 ' + sels.length + '）');
   const set = (a) => a.slice().sort().join(',');
   const sym = sels.filter((x) => x.col === 'py'), mean = sels.filter((x) => x.col === 'mean');
   ok(sym.length === 4 && sym.every((x) => set(x.opts) === '*,+,-,/'), '运算符下拉＝+ - * /（顺序打乱）');
   ok(mean.length === 4 && mean.every((x) => set(x.opts) === '不等于,大于,小于,等于'), '比较运算符下拉＝等于/不等于/大于/小于');
+  // 任务一：三列全改成下拉（学生不用打字），程序那一列就是老师点名的那四个
+  const prog = sels.filter((x) => x.col === 'prog');
+  ok(prog.length === 4 && prog.every((x) => set(x.opts) === set(['在线打字', '画图', 'Word', '剪映'])),
+    '任务一 4 行的「常用的程序」下拉都是：在线打字/画图/Word/剪映');
+  const funcS = sels.filter((x) => x.col === 'func'), feelS = sels.filter((x) => x.col === 'feel');
+  ok(funcS.length === 4 && funcS.every((x) => x.opts.length === 4), '任务一「主要功能」也是 4 选 1 的下拉');
+  ok(feelS.length === 4 && feelS.every((x) => x.opts.length === 4), '任务一「使用体会」也是 4 选 1 的下拉');
+  ok(await ev(`[].slice.call(document.querySelectorAll('#sheetBody .sheet-sec'))[0]
+      .querySelectorAll('input.sheet-cell').length === 0`), '任务一里一个要打字的输入框都没有（全部下拉）');
+  ok(await ev(`(function(){var s=document.querySelectorAll('#sheetBody .sheet-sec')[0];
+      return s.querySelectorAll('tr.sheet-example').length;})()`) === 0, '任务一不再有「计算器」示例行');
   // 选项每次渲染都打乱：4 个下拉的顺序全撞成一样的概率约 1/24³，可以稳稳当当地测
   const orders = sym.map((x) => x.opts.join('|'));
   ok(new Set(orders).size > 1, '4 个运算符下拉的选项顺序不都一样（每次渲染都打乱，学生没法靠位置蒙）');
@@ -159,20 +170,44 @@ function mk(ws) {
   await shot(`document.querySelectorAll('#sheetBody .sheet-sec')[1]`, '第4课-程序代码块与输出表.png');
   await shot(`document.querySelectorAll('#sheetBody .sheet-sec')[4]`, '第4课-符号连线.png');
 
-  // ---- 真填一行 → 能保存、自己变绿、灰底值跟着存下来 ----
-  const sv = await ev(`(function(){
-    var trs=[].slice.call(document.querySelectorAll('#sheetBody table.sheet-table tbody tr'));
-    var tr=trs.filter(function(x){return !x.classList.contains('sheet-given') && !x.classList.contains('sheet-example') && x.querySelector('input[data-col]:not([data-pre])')})[0];
-    if(!tr) return 'no fillable row';
-    tr.querySelectorAll('input').forEach(function(i){ if(!i.dataset.pre){ i.value='计算器'; i.dispatchEvent(new Event('input',{bubbles:true})); } });
-    // 顺手把「程序输出」表的鸡/兔填对，验证预设值 + 学生值一起存
-    var tr2=trs.filter(function(x){return [].slice.call(x.querySelectorAll('input[data-col]')).some(function(i){return i.dataset.col==='ji'})})[0];
-    if(tr2) tr2.querySelectorAll('input').forEach(function(i){
-      if(i.dataset.col==='ji'){i.value='23';i.dispatchEvent(new Event('input',{bubbles:true}));}
-      if(i.dataset.col==='tu'){i.value='12';i.dispatchEvent(new Event('input',{bubbles:true}));}
+  // ---- 真填一份全对的 → 能保存、自己变绿、灰底值跟着存下来、系统判 3/3 ----
+  const PROG = {
+    '在线打字': ['练打字：照着屏幕上的字打，练速度和正确率', '一开始总要低头看键盘，练多了就能盲打'],
+    '画图': ['画画、涂色，还能用各种工具修改画面', '画错了可以撤销重来，比在纸上画省事'],
+    'Word': ['写文章、做表格，排版好以后打印出来', '写错了随时能改，还能调字号、插图片'],
+    '剪映': ['剪视频，加上字幕、音乐和转场效果', '手机电脑都能剪，加个字幕就有大片的感觉'],
+  };
+  // 在页面里把四个任务都填成正确答案（下拉全部按「值」选，不依赖选项顺序）
+  const fillAll = (progOrder, feelOverride) => `(function(){
+    var P=${JSON.stringify(PROG)}, order=${JSON.stringify(progOrder)};
+    var OV=${JSON.stringify(feelOverride || null)};
+    var secs=[].slice.call(document.querySelectorAll('#sheetBody .sheet-sec'));
+    function setv(el,v){ if(!el) return; el.value=v; el.dispatchEvent(new Event('change',{bubbles:true})); }
+    // 任务一：每行选一个程序 + 它的功能/体会
+    [].slice.call(secs[0].querySelectorAll('tbody tr')).forEach(function(tr,i){
+      var p=order[i]; if(!p) return;
+      setv(tr.querySelector('select[data-col="prog"]'),p);
+      setv(tr.querySelector('select[data-col="func"]'),P[p][0]);
+      setv(tr.querySelector('select[data-col="feel"]'),(OV&&OV[i])?OV[i]:P[p][1]);
     });
-    document.getElementById('sheetSaveBtn').click(); return 'ok';})()`);
+    // 任务二：程序输出表 + 手工结果表都填 鸡23/兔12，算式随便写（系统不判，留给老师）
+    [[1,'ji','23'],[1,'tu','12'],[3,'ji','23'],[3,'tu','12']].forEach(function(t){
+      var tr=secs[t[0]].querySelector('tbody tr');
+      tr.querySelectorAll('input').forEach(function(i){ if(i.dataset.col===t[1]) i.value=t[2]; });
+    });
+    [].slice.call(secs[2].querySelectorAll('input')).forEach(function(i){
+      i.value = (i.dataset.col==='tuExpr') ? '(94-35×2)÷2=12（只）' : '35-12=23（只）';
+    });
+    // 任务三：两块的 4 行按行序选对
+    [['+','-','*','/'],['等于','不等于','大于','小于']].forEach(function(ans,si){
+      [].slice.call(secs[4+si].querySelectorAll('tbody tr')).forEach(function(tr,i){
+        setv(tr.querySelector('select'),ans[i]);
+      });
+    });
+    document.getElementById('sheetSaveBtn').click(); return 'ok';})()`;
+  const sv = await ev(fillAll(['在线打字', '画图', 'Word', '剪映']));
   await waitFor(`!document.getElementById('sheetSaveBtn').disabled`, 40, 300);
+  await sleep(400);
   const st2 = (await jfetch('/api/lesson/6-1-4/sheet', 'GET', null, S)).j;
   ok(sv === 'ok' && st2.mates && (st2.mates.list || []).find((r) => r.me).done === true, '填了内容后保存成功，自己那格变已交');
   const rowOut = (st2.prev || []).find((r) => r.ji === '23');
@@ -181,6 +216,51 @@ function mk(ws) {
   ok(st2.mates.submitted === st.mates.submitted + 1 && st2.mates.total === st.mates.total,
     '左栏「已交」正好 +1（' + st.mates.submitted + ' → ' + st2.mates.submitted + '），总人数不变（' + st2.mates.total + '）');
   await shot(`document.querySelector('.sheet-layout')`, '第4课-任务单全貌.png');
+
+  // ---- 学生端「按任务判分」面板：一个任务 1 分，做对得 1 分 ----
+  const auto1 = await ev(`(function(){
+    var h=document.getElementById('sheetAuto');
+    return { shown: !!h && !h.hidden,
+      score: (h.querySelector('.auto-score')||{}).textContent||'',
+      n: h.querySelectorAll('.auto-item').length,
+      okN: h.querySelectorAll('.auto-item.auto-ok').length,
+      names: [].slice.call(h.querySelectorAll('.auto-item .auto-name')).map(function(x){return x.textContent}),
+      notes: [].slice.call(h.querySelectorAll('.auto-item .auto-note')).map(function(x){return x.textContent}),
+      wrong: h.querySelectorAll('.auto-item.auto-no').length,
+      redCells: document.querySelectorAll('#sheetBody .sheet-wrong').length };})()`);
+  ok(auto1.shown, '保存后学生端出现「系统判分」面板');
+  ok(/得了 3 \/ 3 分/.test(auto1.score), '面板上写着「' + auto1.score + '」');
+  ok(auto1.n === 3 && auto1.okN === 3 && auto1.wrong === 0, '三个任务都判成 ✅（实际 ' + auto1.okN + '/3）');
+  ok(/任务① 生活中常用的程序/.test(auto1.names.join('|')), '任务名带序号一起显示：' + auto1.names.join(' / '));
+  ok(/做对了，\+1 分/.test(auto1.notes.join('|')), '对的任务写明「做对了，+1 分」');
+  ok(/老师看/.test(auto1.notes.join('|')), '有一格系统不判的会写明（任务二的算式）：' + auto1.notes.join(' / '));
+  ok(auto1.redCells === 0, '全对时没有标红的格子');
+  await shot(`document.getElementById('sheetAuto')`, '第4课-系统判分面板.png');
+
+  // ---- 故意选错一个 → 只有那一个任务变 ❌、只有那一格标红 ----
+  await ev(fillAll(['在线打字', '画图', 'Word', '剪映'], [PROG['剪映'][1], null, null, null]));
+  await waitFor(`!document.getElementById('sheetSaveBtn').disabled`, 40, 300);
+  await sleep(500);
+  const auto2 = await ev(`(function(){
+    var h=document.getElementById('sheetAuto');
+    var items=[].slice.call(h.querySelectorAll('.auto-item'));
+    var red=[].slice.call(document.querySelectorAll('#sheetBody .sheet-wrong'));
+    return { score:(h.querySelector('.auto-score')||{}).textContent||'',
+      cls: items.map(function(x){return x.className.indexOf('auto-no')>=0?'❌':'✅'}).join(''),
+      notes:[].slice.call(h.querySelectorAll('.auto-item.auto-no .auto-note')).map(function(x){return x.textContent}),
+      red: red.map(function(x){return x.dataset.col}),
+      hint: (h.querySelector('.auto-hint')||{}).textContent||'' };})()`);
+  ok(/得了 2 \/ 3 分/.test(auto2.score), '错一格 → 「' + auto2.score + '」');
+  ok(/^❌✅✅$/.test(auto2.cls), '只有任务一被判错（' + auto2.cls + '）——这就是老师要的「精准识别」');
+  ok(auto2.red.join(',') === 'feel', '只标红了那一格（使用体会），实际标红：' + auto2.red.join(','));
+  ok(/1 处/.test(auto2.notes.join('') + auto2.hint), '写明有几处要改：' + (auto2.notes.join('') || auto2.hint));
+  await shot(`document.getElementById('sheetBody')`, '第4课-判错标红.png');
+  // 改回来再存一次 → 又变全对
+  await ev(fillAll(['在线打字', '画图', 'Word', '剪映']));
+  await waitFor(`!document.getElementById('sheetSaveBtn').disabled`, 40, 300);
+  await sleep(500);
+  ok(/得了 3 \/ 3 分/.test(await ev(`(document.querySelector('#sheetAuto .auto-score')||{}).textContent||''`)),
+    '改对再存 → 系统重新判成 3/3');
 
   // ---- 窄屏（800px）不撑破整页 ----
   await send('Emulation.setDeviceMetricsOverride', { width: 800, height: 900, deviceScaleFactor: 1, mobile: false });

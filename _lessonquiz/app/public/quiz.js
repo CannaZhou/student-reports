@@ -378,7 +378,7 @@
     $('submitBtn').disabled = false; $('submitBtn').textContent = '交卷批改';
   }
 
-  // ================= 课内任务单（开放表：不判分，只记录所填） =================
+  // ================= 课内任务单（开放表；带标准答案的课按任务判分） =================
   function fmtHm(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -462,6 +462,64 @@
       note.textContent = '填写完成后点“保存任务单”，可反复修改';
     }
     renderSheetSide();
+    renderSheetAuto();
+  }
+
+  // 系统判分结果：一个任务 1 分，做对得 1 分、做错不得分。
+  // 后端只告诉学生「哪个任务对、哪一格错」，不给标准答案（给了就能照着抄）。
+  // 这一块只是给学生自己看的，证书/积分里的任务单得分仍然以老师赋的分为准。
+  function renderSheetAuto() {
+    const host = $('sheetAuto');
+    if (!host) return;
+    const a = SHEET && SHEET.auto;
+    host.innerHTML = '';
+    if (!a) { host.hidden = true; return; } // 没判分的课（或还没交过）就不显示
+    host.hidden = false;
+
+    const card = el('div', 'card auto-card');
+    const h = el('div', 'auto-head');
+    h.appendChild(el('b', null, '📋 系统判分'));
+    h.appendChild(el('span', 'auto-score', '得了 ' + a.score + ' / ' + a.taskFull + ' 分'));
+    h.appendChild(el('span', 'muted', '一个任务 1 分，整个任务全做对才得分'));
+    card.appendChild(h);
+
+    const ul = el('ul', 'auto-list');
+    (a.tasks || []).forEach((t) => {
+      const li = el('li', 'auto-item ' + (t.ok === true ? 'auto-ok' : (t.ok === false ? 'auto-no' : 'auto-skip')));
+      li.appendChild(el('span', 'auto-mark', t.ok === true ? '✅' : (t.ok === false ? '❌' : '➖')));
+      li.appendChild(el('span', 'auto-name', '任务' + '①②③④⑤⑥⑦⑧⑨'[t.no - 1] + ' ' + (t.title || '')));
+      let s;
+      // 系统只判有标准答案的格子；任务二里的手工算式没答案，系统判不了，
+      // 所以「✅」也要注明还有几处等老师看，别让学生以为这一任务全查过了。
+      const tail = t.manual ? '（还有 ' + t.manual + ' 处老师看）' : '';
+      if (t.ok === true) s = '做对了，+1 分' + tail;
+      else if (t.ok === false) s = '有 ' + t.wrong + ' 处不对，要改' + tail;
+      else s = '这一任务由老师批阅';
+      li.appendChild(el('span', 'auto-note', s));
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+
+    const wrong = (a.wrong || []).length;
+    if (wrong) {
+      card.appendChild(el('div', 'auto-hint',
+        '打红框的地方要改一改：' + wrong + ' 处。改完再点一次「保存任务单」，系统会重新判一遍。'));
+    } else if (a.allGraded && a.score === a.taskFull) {
+      card.appendChild(el('div', 'auto-hint auto-hint-ok', '全部做对啦！等着老师批完，就能在「我的证书」里看到这一课的综合评价。'));
+    }
+    host.appendChild(card);
+    paintSheetWrong(a);
+  }
+
+  // 把判错的格子标红（按提交时的行号 _i + 列 key 找回来）
+  function paintSheetWrong(a) {
+    document.querySelectorAll('#sheetBody .sheet-wrong').forEach((n) => n.classList.remove('sheet-wrong'));
+    ((a && a.wrong) || []).forEach((w) => {
+      const tr = document.querySelector('#sheetBody tr[data-rowi="' + w.i + '"]');
+      if (!tr) return;
+      const c = tr.querySelector('[data-col="' + w.col + '"]');
+      if (c) c.classList.add('sheet-wrong');
+    });
   }
 
   // 左侧「本班这一课交没交」名单：只列姓名 + 一个红/绿圆点，不显示分数和别人填的内容
@@ -701,8 +759,9 @@
     const btn = $('sheetSaveBtn'); btn.disabled = true;
     try {
       const j = await api('/api/lesson/' + encodeURIComponent(SHEET.lessonId) + '/sheet/submit', 'POST', { rows });
-      SHEET.prev = j.rows; SHEET.lastAt = j.savedAt;
+      SHEET.prev = j.rows; SHEET.lastAt = j.savedAt; SHEET.auto = j.auto || null;
       $('sheetNote').textContent = '已保存 ' + fmtHm(j.savedAt) + ' ✓ 老师能看到，还可继续修改';
+      renderSheetAuto(); // 当场按任务判一遍：哪个任务对、哪几格要改
       // 自己那一格当场变绿，不用重开页面（左栏是这一课交没交，保存过就一直算已交）
       const mates = SHEET.mates;
       if (mates && Array.isArray(mates.list)) {
@@ -722,6 +781,9 @@
         }
       } else if (c && (c.missing || []).indexOf('quiz') >= 0) {
         toast('任务单已保存 ✓ 再做完课后小测就能领本课证书');
+      } else if (j.auto) {
+        toast('任务单已保存 ✓ 系统判分 ' + j.auto.score + '/' + j.auto.taskFull
+          + (j.auto.score === j.auto.taskFull ? '，全部做对 🎉' : '，下面红框的地方再看一看'));
       } else {
         toast('任务单已保存 ✓');
       }

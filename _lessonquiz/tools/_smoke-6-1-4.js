@@ -71,7 +71,18 @@ async function jfetch(path, method, body, ck) {
   const sheet = (await jfetch('/api/lesson/' + LESSON + '/sheet', 'GET', null, S)).j;
   const sec = sheet.sheet.sections;
   ok(sec && sec.length === 6, '任务单 6 个板块（任务一 + 任务二 ×3 + 任务三 ×2，实际 ' + (sec && sec.length) + '）');
-  ok(sec[0].rows === 3 && sec[0].cols.length === 3, '任务一 3 行 × 3 列（程序/功能/体会）');
+  // 任务一（2026-09-29 老师改版）：四个用过的程序，三列全部改成下拉选，判分按任务给
+  ok(sec[0].rows === 4 && sec[0].cols.length === 3, '任务一 4 行 × 3 列（程序/功能/体会）');
+  ok(sec[0].cols.map((c) => c.key).join(',') === 'prog,func,feel', '任务一三列＝程序/主要功能/使用体会');
+  ok(sec[0].cols[0].pick.join(',') === '在线打字,画图,Word,剪映', '任务一程序下拉＝在线打字/画图/Word/剪映');
+  ok(sec[0].cols.every((c) => (c.pick || []).length === 4), '三列都是 4 选 1 的下拉（不用打字，只要选）');
+  ok(!sec[0].example, '去掉了「计算器」示例行（它不在四个程序里，留着会让人以为也要选它）');
+  // task / keys 只在服务端（content.json）里，不下发学生 —— 所以对着原文断言
+  ok(def.sheet.sections.map((b) => b.task).join(',') === '1,2,2,2,3,3',
+    '六个板块归到三个任务（任务二三块／任务三两块各算同一个任务）');
+  ok(def.sheet.sections.filter((b) => b.keys).length === 5, '五个板块写了标准答案（只有任务二的算式那块没有）');
+  ok(def.sheet.sections[0].matchBy === 'prog', '任务一按「选中的程序」查答案（不看行号）');
+  ok(!/keys|matchBy|want/.test(JSON.stringify(sheet.sheet)), '任务单已脱敏：标准答案（keys）和 matchBy 没下发（是白名单，不是黑名单）');
   const code = sec[1].code || '';
   ok(code.startsWith('tu = 0') && code.includes('while tu < 36:') && code.includes('if ji * 2 + tu * 4 == 94:'),
     '任务二带回了「鸡兔同笼.py」代码块');
@@ -94,32 +105,76 @@ async function jfetch(path, method, body, ck) {
   ok(sec[5].rowLabels.join(',') === '==,!=,>,<', '任务三（二）4 行比较运算符');
   ok(!/accepts|expl|answer/.test(JSON.stringify(sheet.sheet)), '任务单已脱敏');
 
-  // 交任务单：任务一 1 行 + 程序输出 1 行 + 算式 1 行 + 手工结果 1 行 + 连线 8 行 = 12 行
-  // 行号顺序＝各板块依次展开：任务一 0~2、程序输出 3、算式 4、手工结果 5、运算符 6~9、比较运算符 10~13
-  const rows = [
-    { _i: 0, prog: '微信', func: '和爸爸妈妈视频通话', feel: '远在外地也能见面' },
-    { _i: 3, tou: '35', jiao: '94', ji: '23', tu: '12' },
-    { _i: 4, tuExpr: '(94-35×2)÷2=12（只）', jiExpr: '35-12=23（只）' },
-    { _i: 5, tou: '35', jiao: '94', ji: '23', tu: '12' },
-    { _i: 6, sym: '＋ （加）', py: '+' }, { _i: 7, sym: '－ （减）', py: '-' },
-    { _i: 8, sym: '× （乘）', py: '*' }, { _i: 9, sym: '÷ （除）', py: '/' },
-    { _i: 10, op: '==', mean: '等于' }, { _i: 11, op: '!=', mean: '不等于' },
-    { _i: 12, op: '>', mean: '大于' }, { _i: 13, op: '<', mean: '小于' },
+  // 标准答案（下拉选项里的正确项）——直接抄 seed 里那份，学生不会拿到
+  const PROG = {
+    '在线打字': ['练打字：照着屏幕上的字打，练速度和正确率', '一开始总要低头看键盘，练多了就能盲打'],
+    '画图': ['画画、涂色，还能用各种工具修改画面', '画错了可以撤销重来，比在纸上画省事'],
+    'Word': ['写文章、做表格，排版好以后打印出来', '写错了随时能改，还能调字号、插图片'],
+    '剪映': ['剪视频，加上字幕、音乐和转场效果', '手机电脑都能剪，加个字幕就有大片的感觉'],
+  };
+  const t1rows = (ord) => ord.map((p, i) => ({ _i: i, prog: p, func: PROG[p][0], feel: PROG[p][1] }));
+  // 交任务单：任务一 4 行 + 程序输出 1 行 + 算式 1 行 + 手工结果 1 行 + 连线 8 行 = 15 行
+  // 行号顺序＝各板块依次展开：任务一 0~3、程序输出 4、算式 5、手工结果 6、运算符 7~10、比较运算符 11~14
+  const rest = () => [
+    { _i: 4, tou: '35', jiao: '94', ji: '23', tu: '12' },
+    { _i: 5, tuExpr: '(94-35×2)÷2=12（只）', jiExpr: '35-12=23（只）' },
+    { _i: 6, tou: '35', jiao: '94', ji: '23', tu: '12' },
+    { _i: 7, sym: '＋ （加）', py: '+' }, { _i: 8, sym: '－ （减）', py: '-' },
+    { _i: 9, sym: '× （乘）', py: '*' }, { _i: 10, sym: '÷ （除）', py: '/' },
+    { _i: 11, op: '==', mean: '等于' }, { _i: 12, op: '!=', mean: '不等于' },
+    { _i: 13, op: '>', mean: '大于' }, { _i: 14, op: '<', mean: '小于' },
   ];
+  const rows = t1rows(['在线打字', '画图', 'Word', '剪映']).concat(rest());
   const save = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST', { rows }, S)).j;
-  ok(save.ok && save.rows.length === 12, '任务单保存 12 行（实际 ' + (save.rows || []).length + '）');
+  ok(save.ok && save.rows.length === 15, '任务单保存 15 行（实际 ' + (save.rows || []).length + '）');
   const back = (await jfetch('/api/lesson/' + LESSON + '/sheet', 'GET', null, S)).j;
   const g = (i) => (back.prev || []).find((r) => r._i === i) || {};
-  ok(g(8).py === '*', '连线（一）「×」选的 * 能回读（续填）');
-  ok(g(11).mean === '不等于', '连线（二）「!=」选的「不等于」能回读');
-  ok(g(4).tuExpr === '(94-35×2)÷2=12（只）', '手工算式能回读（括号、乘号、单位都保留）');
+  ok(g(9).py === '*', '连线（一）「×」选的 * 能回读（续填）');
+  ok(g(12).mean === '不等于', '连线（二）「!=」选的「不等于」能回读');
+  ok(g(5).tuExpr === '(94-35×2)÷2=12（只）', '手工算式能回读（括号、乘号、单位都保留）');
+  ok(g(2).prog === 'Word', '任务一「Word」这一行能回读');
+
+  // ---- 系统按任务判分（一个任务 1 分，做对得 1 分）----
+  const a = back.auto;
+  ok(!!a, '任务单接口带回了系统判分结果');
+  ok(a && a.taskFull === 3 && a.score === 3, '全对 → 系统 3/3 分（实际 ' + (a && a.score) + '/' + (a && a.taskFull) + '）');
+  ok(a && a.tasks.map((t) => t.ok).join(',') === 'true,true,true', '三个任务都判成对');
+  ok(a && a.tasks[1].manual === 2, '任务二里那两格「手工算式」系统不判、留给老师（manual=2）');
+  ok(a && !/want/.test(JSON.stringify(a)), '学生拿到的判分结果里没有标准答案');
+  ok(a && (a.wrong || []).length === 0, '全对时没有标红的格子');
+  // 老师端才带标准答案，老师才能看出学生错在哪一格
+  const bd0 = (await jfetch('/api/teacher/sheet-board/' + LESSON + '?class=' + encodeURIComponent(CLA), 'GET', null, T)).j;
+  const me0 = (bd0.students || []).find((x) => x.uid === NAME + '｜' + CLA);
+  ok(me0 && me0.auto && me0.auto.score === 3, '教师端也有系统判分（3/3）');
+  ok(me0 && me0.auto.cells.every((c) => c.want !== undefined), '教师端每格都带标准答案（改分时看得见学生错在哪）');
+
+  // 错一个：任务一把「在线打字」的使用体会选成了剪映的 → 任务一 0 分、任务二/三照旧
+  const badRows = t1rows(['在线打字', '画图', 'Word', '剪映'])
+    .map((r) => (r.prog === '在线打字' ? { ...r, feel: PROG['剪映'][1] } : r)).concat(rest());
+  const save2 = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST', { rows: badRows }, S)).j;
+  ok(save2.auto && save2.auto.score === 2, '错一格 → 系统降到 2/3（实际 ' + (save2.auto && save2.auto.score) + '）');
+  ok(save2.auto && save2.auto.tasks[0].ok === false && save2.auto.tasks[0].wrong === 1, '任务一被判错，且只指出 1 处');
+  ok(save2.auto && (save2.auto.wrong || []).some((w) => w.i === 0 && w.col === 'feel'), '标红的是第 1 行的「使用体会」格');
+  ok(save2.auto && save2.auto.tasks[1].ok === true && save2.auto.tasks[2].ok === true, '另外两个任务不受影响（这就是「精准识别」）');
+  // 漏选一个程序 / 一个程序选两遍：都必须算错（否则"四行里有三行对"就能蒙混过关）
+  const missOne = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST',
+    { rows: t1rows(['在线打字', '画图', 'Word']).concat(rest()) }, S)).j;
+  ok(missOne.auto && missOne.auto.tasks[0].ok === false, '只填三行（漏了剪映）→ 任务一算错');
+  const dupOne = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST',
+    { rows: t1rows(['在线打字', '画图', 'Word', 'Word']).concat(rest()) }, S)).j;
+  ok(dupOne.auto && dupOne.auto.tasks[0].ok === false, 'Word 选了两遍、剪映没出现 → 任务一算错');
+  const swapped = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST',
+    { rows: t1rows(['剪映', 'Word', '画图', '在线打字']).concat(rest()) }, S)).j;
+  ok(swapped.auto && swapped.auto.tasks[0].ok === true, '四行前后调换顺序 → 照样判对（按选中的程序查答案，不看行号）');
+  // 回到全对那一版，后面的赋分/成绩断言按它来
+  await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST', { rows }, S);
   ok(!!sheet.mates && sheet.mates.total >= 1, '任务单接口带回了本班名单（左栏用）');
 
   // 教师赋分台
   const board = (await jfetch('/api/teacher/sheet-board/' + LESSON + '?class=' + encodeURIComponent(CLA), 'GET', null, T)).j;
   ok(board.sheet.sections.length === 6, '教师端拿到 6 个板块定义');
   const me = (board.students || []).find((x) => x.uid === NAME + '｜' + CLA);
-  ok(me && me.submitted && me.rows.length === 12, '教师端看到该生的 12 行');
+  ok(me && me.submitted && me.rows.length === 15, '教师端看到该生的 15 行');
   const sc = (await jfetch('/api/teacher/sheet-board/' + LESSON + '/score', 'POST', { uid: me.uid, score: 0 }, T)).j;
   ok(sc.ok, '教师可以赋 0 分（0 分也是分）');
   const mine = (await jfetch('/api/student/scores', 'GET', null, S)).j;

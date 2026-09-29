@@ -5,6 +5,7 @@ const {
 const sessions = require('../core/sessions.js');
 const { verifyPassword, hashPassword } = require('../core/passwd.js');
 const { lessonName, publicSheet } = require('../core/catalog.js');
+const { gradeSheet } = require('../core/sheetgrade.js'); // 任务单按任务判分（给老师端看学生错在哪）
 const { sheetTaskCount } = require('../core/lesson.js'); // 任务单满分 = 这一课有几题（老师按"做对几题得几分"打）
 
 function isTeacher(sess) { return !!(sess && sess.role === 'teacher'); }
@@ -235,6 +236,8 @@ function register(router, { store, config }) {
         return {
           uid: s.uid, name: s.name, className: s.className,
           submitted: !!last, lastAt: last ? last.at : null, rows: last ? last.rows : [],
+          // 系统按任务判的分（老师端带标准答案 want，方便当场看出学生错在哪一格）
+          auto: last ? gradeSheet(lesson.sheet, last.rows) : null,
           score: m && typeof m.score === 'number' ? m.score : null,
           scoredAt: m ? (m.at || null) : null,
           lessonQuiz: st && typeof st.best === 'number' ? st.best : null,

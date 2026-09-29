@@ -213,6 +213,25 @@ table.sheet-table { margin-top: 6px; }
 .sheet-rowimg-tag { display: block; margin-top: 3px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .sheet-table tbody tr.sheet-given td { background: var(--green-lt); font-weight: 600; color: var(--green-dk); }
 .sheet-remind { margin-top: 10px; font-size: 13px; color: var(--ink-2); background: #f7faf6; border-radius: 8px; padding: 8px 10px; }
+
+/* 任务单「系统判分」：一个任务 1 分，做对得 1 分 → 学生自己就能看出哪个任务没过 */
+.auto-card { padding: 10px 12px; }
+.auto-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; }
+.auto-head b { font-size: 14px; }
+.auto-score { font-weight: 700; color: var(--green-dk); }
+.auto-head .muted { font-size: 12px; }
+.auto-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.auto-item { display: flex; gap: 8px; align-items: baseline; padding: 5px 0; font-size: 13.5px; border-top: 1px dashed var(--line); }
+.auto-item:first-child { border-top: 0; }
+.auto-mark { width: 18px; flex: none; }
+.auto-name { font-weight: 600; }
+.auto-note { margin-left: auto; color: var(--ink-2); font-size: 12.5px; text-align: right; }
+.auto-item.auto-ok .auto-note { color: var(--ok); }
+.auto-item.auto-no .auto-note { color: var(--bad); }
+.auto-hint { margin-top: 8px; font-size: 12.5px; color: var(--bad); background: #fdf1f1; border-radius: 8px; padding: 7px 9px; }
+.auto-hint-ok { color: var(--green-dk); background: var(--green-lt); }
+/* 判错的格子打红框（答题时就地提示，改完重交会重新判） */
+.sheet-cell.sheet-wrong { border-color: var(--bad); background: #fdf1f1; box-shadow: 0 0 0 1px var(--bad) inset; }
 /* 多板块任务单：一个任务单里放活动一/二/三，每板块一张表 */
 .sheet-sec { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
 .sheet-sec-head { font-size: 14.5px; font-weight: 700; color: var(--green-dk); }
@@ -270,6 +289,17 @@ input.score-in { width: 62px; padding: 5px 4px; font-size: 14px; text-align: cen
 .bulk-bar .bulk-n { font-weight: 700; color: var(--green-dk); min-width: 108px; }
 .bulk-bar .bulk-sp { color: var(--ink-2); }
 .bulk-bar .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 赋分台里的「系统按任务判分」：行内小标签（任务①✅）+ 展开内容顶部的判定条 + 判错的格子 */
+.sys-line { font-size: 11px; margin-top: 3px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.sys-task { font-size: 11px; padding: 0 4px; border-radius: 6px; white-space: nowrap; }
+.sys-task.st-ok { color: var(--ok); background: #eef9f0; }
+.sys-task.st-no { color: var(--bad); background: #fdf1f1; font-weight: 700; }
+.sys-task.st-skip { color: var(--ink-2); background: #f2f4f2; }
+.sys-bar { font-size: 12px; margin: 2px 0 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sys-bar .muted { font-size: 11.5px; }
+.tbl td.td-wrong { background: #fdf1f1; }
+.tbl td.td-wrong .fix-want { display: block; font-size: 11px; color: var(--bad); }
 .tbl input[type=checkbox] { cursor: pointer; }
 .sum-cell { font-weight: 700; color: var(--green-dk); }
 .sum-total { font-weight: 800; color: var(--green); font-size: 15px; }

@@ -16,8 +16,11 @@ const LEVEL_STAR = { 1: '★ 简单', 2: '★★ 中等', 3: '★★★ 偏难' 
 // code＝板块里带一段程序（如第4课的“鸡兔同笼.py”）：按原样多行显示，前端渲染成等宽代码块；
 // preset＝题目已经印好、不用学生再抄一遍的数据，按「第几个可填行」给：{0:{tou:'35',jiao:'94'}}
 //         （这些格子先填好并置灰，收卷时不算“学生填过”，避免只点一下保存就算交了）。
+// tasks＝任务名（按任务号排列），学生端「任务一 ✅ / 任务二 ❌」那块要用，发了不泄题。
+// ⚠️ 板块上的 keys（标准答案）与 matchBy 绝不在白名单里 —— 一发学生就能照抄，见 core/sheetgrade.js。
 const SHEET_FIELDS = ['title', 'heading', 'intro', 'caption', 'code', 'cols', 'rows',
-  'example', 'remind', 'image', 'rowLabels', 'rowImages', 'given', 'givenTop', 'preset', 'rowPick', 'noHead', 'center'];
+  'example', 'remind', 'image', 'rowLabels', 'rowImages', 'given', 'givenTop', 'preset', 'rowPick', 'noHead', 'center',
+  'tasks'];
 
 // 课名（带课号）在 core/lesson.js（叶子模块，cert.js 也要用，避免两个模块互相 require 成环）
 

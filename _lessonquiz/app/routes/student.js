@@ -7,10 +7,19 @@ const { lessonName, publicQuestion, publicSheet, sheetRowSpecs, buildCatalog } =
 const { gradeBasic, gradeBlanks, blankListOf } = require('../core/grade.js');
 const { evalLesson, issueIfReady, buildCertWall, certBrief, certToast, whereOf } = require('../core/cert.js');
 const { sheetTaskCount } = require('../core/lesson.js'); // 任务单满分 = 这一课有几题
+const { gradeSheet, studentView } = require('../core/sheetgrade.js'); // 任务单按任务判分（做对 1 分）
 
 function studentOf(sess, store) {
   if (!sess || sess.role !== 'student') return null;
   return store.findRoster(sess.uid);
+}
+// 系统按任务判分的结果（给学生看的版本，不含标准答案）。
+// 没交过、或者这一课的任务单压根没写标准答案（keys）→ null，前端就不显示这一块，照旧只记录。
+function autoOf(lesson, rows) {
+  if (!lesson || !lesson.sheet || !rows || !rows.length) return null;
+  const g = gradeSheet(lesson.sheet, rows);
+  if (!g || !g.graded) return null;
+  return studentView(g);
 }
 function displayChoice(q) {
   if (q.type === 'judge') {
@@ -184,6 +193,9 @@ function register(router, { store, config }) {
       sheet: publicSheet(lesson.sheet),
       prev: store.lastSheetRows(stu.uid, lesson.id),
       lastAt: sh ? (sh.lastAt || null) : null,
+      // 系统按任务判的结果（哪几个任务对、哪几格错）：拿存着的作答实时重算，
+      // 不落盘 —— 老师改了题/改了任务划分，学生下次打开看到的就是新的，不会有陈旧分。
+      auto: autoOf(lesson, store.lastSheetRows(stu.uid, lesson.id)),
       mates: classMateStatus(store, stu, lesson.id),
     });
   });
@@ -234,7 +246,7 @@ function register(router, { store, config }) {
       certEv = issueIfReady(store, stu, lesson).ev;
       store.saveProgress(stu.uid);
     });
-    ok(res, { savedAt, rows, cert: certToast(certEv) });
+    ok(res, { savedAt, rows, auto: autoOf(lesson, rows), cert: certToast(certEv) });
   });
 
   // 证书墙：本年级全部课（+本人有记录的其它课），未发证的也返回，前端标「还差什么」

@@ -91,11 +91,15 @@ async function jfetch(path, method, body, ck) {
   ok(board.sheet.sections.length === 2, '教师端拿到 2 个板块定义');
   const me = (board.students || []).find((x) => x.uid === NAME + '｜' + CLA);
   ok(me && me.submitted && me.rows.length === 4, '教师端看到该生的 4 行（表格 3 行 + 流程图 1 行）');
-  const sc = (await jfetch('/api/teacher/sheet-board/' + LESSON + '/score', 'POST', { uid: me.uid, score: 9 }, T)).j;
-  ok(sc.ok, '教师赋分 9 分');
+  // 满分＝本课任务数（2026-09-25 口径：一题 1 分、做对几题得几分，不再是 0–10 分制）
+  ok(board.lesson.taskFull === 2, '本课任务单满分＝2 题（实际 ' + board.lesson.taskFull + '）');
+  const sc = (await jfetch('/api/teacher/sheet-board/' + LESSON + '/score', 'POST', { uid: me.uid, score: 2 }, T)).j;
+  ok(sc.ok, '教师赋分 2 分（满分）');
+  const sc9 = await jfetch('/api/teacher/sheet-board/' + LESSON + '/score', 'POST', { uid: me.uid, score: 9 }, T);
+  ok(sc9.r.status === 400, '超过任务数（给 9 分）被拒：' + (sc9.j.error && sc9.j.error.msg));
   const mine = (await jfetch('/api/student/scores', 'GET', null, S)).j;
   const row3 = (mine.rows || []).find((x) => x.lessonId === LESSON);
-  ok(row3 && row3.task === 9 && row3.best === 4, '学生「我的成绩」：小测 4 分 + 任务单 9 分');
+  ok(row3 && row3.task === 2 && row3.best === 4, '学生「我的成绩」：小测 4 分 + 任务单 2 分');
 
   // 清理
   await jfetch('/api/teacher/progress/delete', 'POST', { uid: me.uid, lessonId: LESSON, kind: 'sheet' }, T);

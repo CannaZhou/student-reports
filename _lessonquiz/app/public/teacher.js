@@ -249,6 +249,21 @@
       box.appendChild(el('div', 'muted', s.submitted ? '（空）' : '—'));
       td.appendChild(box); return td;
     }
+    // 系统按任务判的结果：哪个任务对、哪一格错、标准答案是什么（这些只给老师看，不下发学生）
+    const autoBy = {};
+    ((s.auto && s.auto.cells) || []).forEach((c) => { autoBy[c.i + '|' + c.col] = c; });
+    if (s.auto && s.auto.graded) {
+      const bar = el('div', 'sys-bar');
+      bar.appendChild(el('b', null, '系统按任务判分：'));
+      (s.auto.tasks || []).forEach((t) => {
+        bar.appendChild(el('span', 'sys-task ' + (t.ok === true ? 'st-ok' : (t.ok === false ? 'st-no' : 'st-skip')),
+          '任务' + '①②③④⑤⑥⑦⑧⑨'[t.no - 1] + ' ' + (t.title || '')
+          + (t.ok === true ? ' ✅ +1' : (t.ok === false ? ' ❌ ' + t.wrong + ' 处不对' : ' ➖ 老师看'))));
+      });
+      bar.appendChild(el('span', 'muted', '　系统给了 ' + s.auto.score + '/' + s.auto.taskFull + ' 分'
+        + (s.auto.manual && s.auto.manual.length ? '；有 ' + s.auto.manual.length + ' 处系统不判（如手工算式），请老师看过再定分' : '')));
+      box.appendChild(bar);
+    }
     let gi = 0, shown = 0;
     blocks.forEach((b, bi) => {
       // 流程图板块（第3课任务二）：整块算「一行」，把学生选的词填回流程图里给老师看。
@@ -308,6 +323,16 @@
             if (!row) tc.style.color = 'var(--ink-2)';
           } else if (!v && ci === 0 && labels[i]) { tc.textContent = labels[i]; tc.style.color = 'var(--ink-2)'; }
           else tc.textContent = v || '—';
+          // 系统判这一格错的：标红并把标准答案写在旁边（老师改分时心里有数；
+          // 系统不判的格子没有这条记录，照旧只显示学生填的内容）
+          const ac = autoBy[(gi + i) + '|' + c.key];
+          if (ac && !ac.ok) {
+            tc.classList.add('td-wrong');
+            // want 可能是数组（一格收了多种写法，如「23」「23只」），只印第一个给老师看
+            const want = Array.isArray(ac.want) ? ac.want[0] : ac.want;
+            if (want != null && want !== '') tc.appendChild(el('span', 'fix-want', '应为 ' + want));
+            else if (!v) tc.appendChild(el('span', 'fix-want', '未作答'));
+          }
           tr.appendChild(tc);
         });
         st.appendChild(tr); shown++;
@@ -557,6 +582,29 @@
       };
       scWrap.appendChild(inp); scWrap.appendChild(clearBtn);
       sc.appendChild(scWrap);
+      // 系统按任务判的分：老师一眼看出这个学生是哪个任务错了，点一下就按系统的分填上，
+      // 觉得系统判得不对（比如任务二的算式写得乱）就自己改，最后仍以老师填的为准。
+      if (s.auto && s.auto.graded) {
+        const sysLine = el('div', 'sys-line');
+        sysLine.appendChild(el('span', 'muted', '系统 '));
+        const sysB = el('b', null, s.auto.score + '/' + s.auto.taskFull);
+        sysB.style.color = s.auto.score === s.auto.taskFull ? 'var(--ok)' : 'var(--bad)';
+        sysLine.appendChild(sysB);
+        (s.auto.tasks || []).forEach((t) => {
+          const sp = el('span', 'sys-task ' + (t.ok === true ? 'st-ok' : (t.ok === false ? 'st-no' : 'st-skip')),
+            '任务' + '①②③④⑤⑥⑦⑧⑨'[t.no - 1] + (t.ok === true ? '✅' : (t.ok === false ? '❌' : '➖')));
+          sysLine.appendChild(sp);
+        });
+        if (s.auto.manual && s.auto.manual.length) {
+          sysLine.appendChild(el('span', 'muted', '（另有 ' + s.auto.manual.length + ' 处要老师看）'));
+        }
+        const fillBtn = el('button', 'btn ghost sys-fill', '按系统分填 ' + s.auto.score);
+        fillBtn.style.padding = '1px 6px'; fillBtn.style.fontSize = '11px';
+        fillBtn.title = '把系统判的分填进左边的输入框（仍可自己改）';
+        fillBtn.onclick = () => { inp.value = String(s.auto.score); commit(); };
+        sysLine.appendChild(fillBtn);
+        sc.appendChild(sysLine);
+      }
       sc.appendChild(stamped);    // 「赋分于 9/22 15:41」
       sc.appendChild(certHint);   // 「证书 X% · Y 星」，赋分后当场出现
       tr.appendChild(sc);
