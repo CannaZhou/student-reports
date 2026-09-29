@@ -89,7 +89,7 @@ function mk(ws) {
     return { text:p.textContent, lines:p.textContent.split('\\n').length,
              font:cs.fontFamily, white:cs.whiteSpace, scrollW:p.scrollWidth, clientW:p.clientWidth,
              bg:cs.backgroundColor, borderL:cs.borderLeftWidth };})()`);
-  ok(!!c, '任务二里出现了程序代码块');
+  ok(!!c, '任务三里出现了程序代码块');
   ok(c && c.lines === 6, '代码按 6 行显示（实际 ' + (c && c.lines) + ' 行）');
   ok(c && c.white === 'pre' && /Consolas|monospace|Courier/i.test(c.font), '代码块用等宽字体、保留换行缩进');
   ok(c && /print\(ji, "只鸡", tu, "只兔"\)/.test(c.text), '屏幕上能看到完整的 print 语句');
@@ -98,8 +98,10 @@ function mk(ws) {
 
   // ---- 六个板块的表头对得上 ----
   const heads = await ev(`[].slice.call(document.querySelectorAll('#sheetBody .sheet-sec-head')).map(function(x){return x.textContent})`);
-  ok(heads.length === 6 && /学习任务一/.test(heads[0]) && /学习任务二/.test(heads[1]) && /学习任务三/.test(heads[4]),
-    '板块标题＝任务一 / 任务二×3 / 任务三×2');
+  // 2026-09-29 老师把任务二/三整体对调了：任务二＝符号连线（两块），任务三＝运行程序+算式+结果（三块）
+  ok(heads.length === 6 && /学习任务一/.test(heads[0]) && /学习任务二/.test(heads[1]) && /学习任务二/.test(heads[2])
+    && /学习任务三/.test(heads[3]) && /学习任务三/.test(heads[5]),
+    '板块标题＝任务一 / 任务二×2（符号连线）/ 任务三×3（运行+算式+结果）：' + heads.join(' / '));
 
   // ---- 灰底 preset 格：头 35、脚 94 已经填好 ----
   const pre = await ev(`(function(){
@@ -162,13 +164,13 @@ function mk(ws) {
   const secFields = await ev(`[].slice.call(document.querySelectorAll('#sheetBody .sheet-sec')).map(function(s){
     return s.querySelectorAll('input.sheet-cell, select.sheet-pick').length;})`);
   ok(secFields.length === 6 && secFields.every((n) => n > 0), '6 个板块都有可填的格子（' + secFields.join('/') + '）');
-  ok(await ev(`[].slice.call(document.querySelectorAll('#sheetBody .sheet-sec'))[2].querySelectorAll('input.sheet-cell').length === 2`),
+  ok(await ev(`[].slice.call(document.querySelectorAll('#sheetBody .sheet-sec'))[4].querySelectorAll('input.sheet-cell').length === 2`),
     '手工算式板块：兔、鸡各有一个填写框');
   // 截图前把 toast 摘掉：fixed 定位的元素在 captureBeyondViewport 的整页截图里会飘到中间，
   // 正好盖住代码块的头两行（虚惊一场，跟功能无关）
   await ev(`(function(){var t=document.querySelector('.toast'); if(t) t.remove(); return 1;})()`);
-  await shot(`document.querySelectorAll('#sheetBody .sheet-sec')[1]`, '第4课-程序代码块与输出表.png');
-  await shot(`document.querySelectorAll('#sheetBody .sheet-sec')[4]`, '第4课-符号连线.png');
+  await shot(`document.querySelectorAll('#sheetBody .sheet-sec')[3]`, '第4课-程序代码块与输出表.png');
+  await shot(`document.querySelectorAll('#sheetBody .sheet-sec')[1]`, '第4课-符号连线.png');
 
   // ---- 真填一份全对的 → 能保存、自己变绿、灰底值跟着存下来、系统判 3/3 ----
   const PROG = {
@@ -190,17 +192,17 @@ function mk(ws) {
       setv(tr.querySelector('select[data-col="func"]'),P[p][0]);
       setv(tr.querySelector('select[data-col="feel"]'),(OV&&OV[i])?OV[i]:P[p][1]);
     });
-    // 任务二：程序输出表 + 手工结果表都填 鸡23/兔12，算式随便写（系统不判，留给老师）
-    [[1,'ji','23'],[1,'tu','12'],[3,'ji','23'],[3,'tu','12']].forEach(function(t){
+    // 任务三：程序输出表（第4块）+ 手工结果表（第6块）都填 鸡23/兔12，算式随便写（系统不判，留给老师）
+    [[3,'ji','23'],[3,'tu','12'],[5,'ji','23'],[5,'tu','12']].forEach(function(t){
       var tr=secs[t[0]].querySelector('tbody tr');
       tr.querySelectorAll('input').forEach(function(i){ if(i.dataset.col===t[1]) i.value=t[2]; });
     });
-    [].slice.call(secs[2].querySelectorAll('input')).forEach(function(i){
+    [].slice.call(secs[4].querySelectorAll('input')).forEach(function(i){
       i.value = (i.dataset.col==='tuExpr') ? '(94-35×2)÷2=12（只）' : '35-12=23（只）';
     });
-    // 任务三：两块的 4 行按行序选对
+    // 任务二：两块的 4 行按行序选对（运算符、比较运算符）
     [['+','-','*','/'],['等于','不等于','大于','小于']].forEach(function(ans,si){
-      [].slice.call(secs[4+si].querySelectorAll('tbody tr')).forEach(function(tr,i){
+      [].slice.call(secs[1+si].querySelectorAll('tbody tr')).forEach(function(tr,i){
         setv(tr.querySelector('select'),ans[i]);
       });
     });
@@ -233,7 +235,7 @@ function mk(ws) {
   ok(auto1.n === 3 && auto1.okN === 3 && auto1.wrong === 0, '三个任务都判成 ✅（实际 ' + auto1.okN + '/3）');
   ok(/任务① 生活中常用的程序/.test(auto1.names.join('|')), '任务名带序号一起显示：' + auto1.names.join(' / '));
   ok(/做对了，\+1 分/.test(auto1.notes.join('|')), '对的任务写明「做对了，+1 分」');
-  ok(/老师看/.test(auto1.notes.join('|')), '有一格系统不判的会写明（任务二的算式）：' + auto1.notes.join(' / '));
+  ok(/老师看/.test(auto1.notes.join('|')), '有一格系统不判的会写明（任务三的算式）：' + auto1.notes.join(' / '));
   ok(auto1.redCells === 0, '全对时没有标红的格子');
   await shot(`document.getElementById('sheetAuto')`, '第4课-系统判分面板.png');
 

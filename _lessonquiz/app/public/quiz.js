@@ -463,6 +463,7 @@
     }
     renderSheetSide();
     renderSheetAuto();
+    renderSheetTeach();
   }
 
   // 系统判分结果：一个任务 1 分，做对得 1 分、做错不得分。
@@ -509,6 +510,57 @@
     }
     host.appendChild(card);
     paintSheetWrong(a);
+  }
+
+  // 老师的评分：老师逐题点过「✓对/✗错」就把每一题列出来（哪些是老师判的、哪些还只是系统判的）。
+  // 老记录只有总分（没有逐题标记）时只说总分，绝不假装逐题标记过。
+  // 最终以老师为准：这一块显示的分就是证书里算的那个分（SHEET.mark.score）。
+  function renderSheetTeach() {
+    const host = $('sheetTeach');
+    if (!host) return;
+    host.innerHTML = '';
+    const m = SHEET && SHEET.mark;
+    if (!m || (m.score == null && !m.tasks)) { host.hidden = true; return; }
+    host.hidden = false;
+    const CIRC = '①②③④⑤⑥⑦⑧⑨';
+    const full = SHEET.taskFull || (SHEET.auto && SHEET.auto.taskFull) || null;
+    const aOf = (no) => (((SHEET.auto && SHEET.auto.tasks) || []).filter((t) => t.no === no)[0]) || null;
+    const titles = (SHEET.sheet && Array.isArray(SHEET.sheet.tasks)) ? SHEET.sheet.tasks : [];
+    const nameOf = (no) => titles[no - 1] || ((aOf(no) || {}).title) || '';
+
+    const card = el('div', 'card teach-card');
+    const h = el('div', 'teach-head');
+    h.appendChild(el('b', null, '👩🏫 老师的评分'));
+    h.appendChild(el('span', 'teach-score',
+      m.score == null ? '还没给分' : ('得了 ' + m.score + (full ? ' / ' + full : '') + ' 分')));
+    if (m.at) h.appendChild(el('span', 'muted', '老师评于 ' + fmtHm(m.at)));
+    card.appendChild(h);
+
+    if (!m.tasks) {
+      card.appendChild(el('div', 'teach-hint',
+        '老师这次只给了总分，没有逐题标记。上面「系统判分」里能看到哪个任务不对，最终分数以老师的为准。'));
+      host.appendChild(card);
+      return;
+    }
+    // 每一题都列出来：老师判过的照老师说的，没判的写「还没判」——不要拿系统的判定冒充老师。
+    const maxNo = Math.max(full || 0, ...Object.keys(m.tasks).map(Number), 0);
+    const ul = el('ul', 'auto-list teach-list');
+    for (let no = 1; no <= maxNo; no++) {
+      const marked = typeof m.tasks[no] === 'boolean';
+      const ok = m.tasks[no] === true;
+      const a = aOf(no);
+      const li = el('li', 'auto-item '
+        + (marked ? (ok ? 'auto-ok' : 'auto-no') : 'auto-skip'));
+      li.appendChild(el('span', 'auto-mark', marked ? (ok ? '✅' : '❌') : '➖'));
+      li.appendChild(el('span', 'auto-name', '任务' + CIRC[no - 1] + ' ' + nameOf(no)));
+      let s = marked ? (ok ? '老师判为做对，+1 分' : '老师判为还不对，不得分') : '老师还没判这一题';
+      if (a && a.graded) s += '　（系统判' + (a.ok === true ? '✅' : '❌') + '）';
+      li.appendChild(el('span', 'auto-note', s));
+      ul.appendChild(li);
+    }
+    card.appendChild(ul);
+    card.appendChild(el('div', 'teach-hint', '老师判的分才是最后算进证书的分；觉得判得不对，可以重交任务单再请老师看一次。'));
+    host.appendChild(card);
   }
 
   // 把判错的格子标红（按提交时的行号 _i + 列 key 找回来）

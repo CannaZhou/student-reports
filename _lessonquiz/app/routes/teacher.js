@@ -5,7 +5,7 @@ const {
 const sessions = require('../core/sessions.js');
 const { verifyPassword, hashPassword } = require('../core/passwd.js');
 const { lessonName, publicSheet } = require('../core/catalog.js');
-const { gradeSheet } = require('../core/sheetgrade.js'); // 任务单按任务判分（给老师端看学生错在哪）
+const { gradeSheet, taskTitles } = require('../core/sheetgrade.js'); // 任务单按任务判分（给老师端看学生错在哪）
 const { sheetTaskCount } = require('../core/lesson.js'); // 任务单满分 = 这一课有几题（老师按"做对几题得几分"打）
 
 function isTeacher(sess) { return !!(sess && sess.role === 'teacher'); }
@@ -66,7 +66,12 @@ function termOf(store, uid, grade) {
     const st = p && p.lessons && p.lessons[l.id];
     const m = p && p.marks && p.marks[l.id];
     const quiz = st && typeof st.best === 'number' ? st.best : null;
-    const task = m && typeof m.score === 'number' ? m.score : null;
+    // ⚠️ 要钳到本课满分：证书那边早就钳过了（core/cert.js），这里不钳两边就会打架——
+    //    期末汇总显示 3 分、证书却按 2 分算。历史上按 0–10 打过脏分，加了逐题标记更容易超。
+    const cap = l.sheet ? sheetTaskCount(l.sheet) : null;
+    const task = (m && typeof m.score === 'number')
+      ? (cap == null ? m.score : Math.max(0, Math.min(m.score, cap)))
+      : null;
     per.push({ id: l.id, quiz, task });
     if (quiz != null) quizSum += quiz;
     if (task != null) taskSum += task;
@@ -217,6 +222,12 @@ function register(router, { store, config }) {
     if (!lesson.sheet) return fail(res, 404, '本课没有课内任务单');
     const lessonGrade = gradeOfLesson(store, lesson.id);
     const full = (lesson.questions || []).length;
+    const taskFull = sheetTaskCount(lesson.sheet); // 本课任务单共几题，满分就是几
+    // 本课有几个任务、各叫什么 —— 赋分台那排「逐题打勾/打叉」按钮按它渲染。
+    // ⚠️ 不能拿学生的 auto.tasks 当数据源：没交作业的学生 auto 是 null，而没交的也要能赋分；
+    //    而且没有 keys 的课（四上1课、六上2课）auto.graded 是 0，整条判定条压根不渲染。
+    //    所以任务清单只看任务单定义本身，一个班算一次。
+    const tasks = taskTitles(lesson.sheet);
     const classes = classListOf(store).filter((c) => c.grade === lessonGrade);
 
     // 选定班级：优先 ?class= 且年级匹配；否则取该年级第一个班
@@ -240,6 +251,8 @@ function register(router, { store, config }) {
           auto: last ? gradeSheet(lesson.sheet, last.rows) : null,
           score: m && typeof m.score === 'number' ? m.score : null,
           scoredAt: m ? (m.at || null) : null,
+          // 老师逐题打的勾/叉（{任务号: true|false}；老数据只有总分、没有这个键 → null）
+          taskMarks: store.taskMarks(s.uid, lesson.id, taskFull),
           lessonQuiz: st && typeof st.best === 'number' ? st.best : null,
           lessonFull: full,
           termScore: termOf(store, s.uid, s.grade || lessonGrade).total,
@@ -248,7 +261,7 @@ function register(router, { store, config }) {
     const sub = students.filter((r) => r.submitted).sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
     const nsub = students.filter((r) => !r.submitted).sort((a, b) => a.name.localeCompare(b.name, 'zh'));
     ok(res, {
-      lesson: { id: lesson.id, title: lessonName(lesson), grade: lessonGrade, full, taskFull: sheetTaskCount(lesson.sheet) },
+      lesson: { id: lesson.id, title: lessonName(lesson), grade: lessonGrade, full, taskFull, tasks },
       sheet: publicSheet(lesson.sheet),
       classes: classes.map((c) => ({ name: c.name, count: c.count })),
       clsName,
@@ -297,6 +310,71 @@ function register(router, { store, config }) {
     ok(res, {
       score: saved ? saved.score : null,
       scoredAt: saved ? (saved.at || null) : null,
+      // 直接填总分＝老师自己给的数，逐题标记随之作废。这里必须回一个 tasks:null，
+      // 否则前端那一排勾还留在新填的数字底下，同一格里自己跟自己打架。
+      tasks: null,
+      termScore: termOf(store, uid, stu.grade || gradeOfLesson(store, lesson.id)).total,
+    });
+  });
+
+  // 逐题赋分（2026-09-29 老师要求「一题一改」）：给某生的某一个任务打勾/打叉/取消。
+  // body: {uid, task: 任务号, ok: true=对 / false=错 / null=取消}
+  //   或：{uid, tasks: {1:true,2:false}} —— 整张「逐题判定」一次覆盖（前端点按钮就走这条：
+  //       把系统判得出的题和老师改的题一起落下来，避免「点一下变成 0 分」）。
+  // 本课总分 = 打勾的个数，仍然存在同一个 p.marks[lid].score 里 —— 证书、积分、期末汇总
+  // 全都只认 score，所以这条链路一行不用改。
+  router.add('POST', '/api/teacher/sheet-board/:id/task', async (req, res, ctx, params) => {
+    if (!requireTeacher(req, res, config)) return;
+    const lesson = store.findLesson(params.id);
+    if (!lesson) return fail(res, 404, '没有这份检测卷');
+    if (!lesson.sheet) return fail(res, 404, '本课没有课内任务单');
+    const body = await readBody(req, config.maxBodyMB * 1024 * 1024);
+    const uid = String(body.uid || '');
+    const stu = store.findRoster(uid);
+    if (!stu) return fail(res, 404, '名单里没有这位学生');
+
+    const taskFull = sheetTaskCount(lesson.sheet);
+    const whole = (body.tasks && typeof body.tasks === 'object') ? body.tasks : null;
+    if (whole) {
+      const bad = Object.keys(whole).filter((k) => {
+        const n = Number(k);
+        return !Number.isInteger(n) || n < 1 || n > taskFull || typeof whole[k] !== 'boolean';
+      });
+      if (bad.length) return fail(res, 400, '逐题判定的题号/取值不合法：' + bad.join(','));
+    }
+    const no = Number(body.task);
+    if (!whole && (!Number.isInteger(no) || no < 1 || no > taskFull)) {
+      return fail(res, 400, '本课任务单共 ' + taskFull + ' 题，题号需为 1–' + taskFull);
+    }
+    const ok3 = body.ok === true ? true : (body.ok === false ? false : null);
+
+    await store.mutate(() => {
+      let p = store.progress[uid];
+      if (!p) {
+        p = {
+          uid, name: stu.name, className: stu.className,
+          createdAt: new Date().toISOString(), lessons: {}, sheets: {}, marks: {},
+        };
+        store.progress[uid] = p;
+      }
+      if (!p.marks) p.marks = {};
+      const cur = p.marks[lesson.id] || {};
+      const tasks = whole ? Object.assign({}, whole) : Object.assign({}, cur.tasks || {});
+      if (!whole) { if (ok3 === null) delete tasks[no]; else tasks[no] = ok3; }
+      const score = Object.keys(tasks).filter((k) => tasks[k]).length;
+      // 逐题标记被清空（老师把每一题都点回了「未标」）→ 整条评分删掉，那一行退回「未赋分」（橙）。
+      // 注意和「三题都打✗」的区别：那种情况 tasks 里有三条 false，是一条货真价实的 0 分记录。
+      if (!Object.keys(tasks).length) delete p.marks[lesson.id];
+      else p.marks[lesson.id] = { score, at: new Date().toISOString(), tasks };
+      p.name = stu.name; p.className = stu.className;
+      store.saveProgress(uid);
+    });
+
+    const saved = store.markStat(uid, lesson.id);
+    ok(res, {
+      score: saved ? saved.score : null,
+      scoredAt: saved ? (saved.at || null) : null,
+      tasks: store.taskMarks(uid, lesson.id, taskFull),
       termScore: termOf(store, uid, stu.grade || gradeOfLesson(store, lesson.id)).total,
     });
   });
@@ -340,6 +418,8 @@ function register(router, { store, config }) {
           store.progress[uid] = p;
         }
         if (!p.marks) p.marks = {};
+        // 批量记分/清除都会把逐题标记一起作废（整条重写，不带 tasks），
+        // 免得出现「总分 2、底下三个任务只有一个打勾」这种自相矛盾。
         if (clear) { delete p.marks[lesson.id]; }
         else { p.marks[lesson.id] = { score, at }; }
         p.name = stu.name; p.className = stu.className;
@@ -349,6 +429,7 @@ function register(router, { store, config }) {
           uid, name: stu.name,
           score: saved ? saved.score : null,
           scoredAt: saved ? (saved.at || null) : null,
+          tasks: null, // 同上：让前端把那一排勾清掉
           termScore: termOf(store, uid, stu.grade || gradeOfLesson(store, lesson.id)).total,
         });
       }

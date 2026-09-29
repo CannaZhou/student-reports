@@ -84,18 +84,31 @@ function mk(ws) {
     fs.writeFileSync(path.join(shotDir, name + '.png'), Buffer.from(r.result.data, 'base64'));
   };
 
-  // 打开赋分台并切到本测试班
+  // 打开赋分台并切到本测试班。
+  // 三步都是异步重画（标签页会先清空 #tabBody、换班要等班级胶囊和表格回来），
+  // 所以不能「点完 sleep 一下就当切好了」——那样偶尔会停在默认班，后面读到别人的行。
+  // 这里统一重试到「本班这个学生的行真的出现」为止。
   await send('Page.navigate', { url: BASE + '/teacher' });
   await sleep(1200);
   await ev("document.getElementById('pw').value='123456';document.getElementById('loginGo').click();");
   await sleep(1400);
   await ev("window.confirm=function(){return true;}");   // 一键记 0 分有确认框，无头模式会卡住
-  await ev("document.querySelector('.tab[data-tab=\"overview\"]').click()");
-  await sleep(1400);
-  await ev("(function(){var tr=[].filter.call(document.querySelectorAll('tr'),function(r){return r.textContent.indexOf('第3课')>=0;})[0];var b=[].filter.call(tr.querySelectorAll('.btn'),function(x){return x.textContent.indexOf('课内任务单')>=0;})[0];b.click();})()");
-  await sleep(1400);
-  await ev("(function(){var c=[].filter.call(document.querySelectorAll('.cls-chip'),function(x){return x.textContent.indexOf('六年级批量界面班')>=0;})[0];if(c&&!c.classList.contains('on'))c.click();})()");
-  await sleep(1400);
+  let onBoard = false;
+  for (let i = 0; i < 12 && !onBoard; i++) {
+    await ev("(function(){var t=document.querySelector('.tab[data-tab=\"overview\"]');if(t&&!t.classList.contains('on'))t.click();"
+      + "var back=[].filter.call(document.querySelectorAll('button'),function(b){return b.textContent.indexOf('返回各课情况')>=0;})[0];if(back)back.click();return 1;})()");
+    await sleep(700);
+    const hit = await ev("(function(){var tr=[].filter.call(document.querySelectorAll('tr'),function(r){return r.textContent.indexOf('第3课')>=0&&r.querySelector('button');})[0];"
+      + "if(!tr)return 0;var b=[].filter.call(tr.querySelectorAll('.btn'),function(x){return x.textContent.indexOf('课内任务单')>=0;})[0];if(!b)return 0;b.click();return 1;})()");
+    if (!hit) continue;
+    await sleep(900);
+    await ev("(function(){var c=[].filter.call(document.querySelectorAll('.cls-chip'),function(x){return x.textContent.indexOf('六年级批量界面班')>=0;})[0];if(c&&!c.classList.contains('on'))c.click();return 1;})()");
+    for (let k = 0; k < 12 && !onBoard; k++) {
+      onBoard = await ev("[].filter.call(document.querySelectorAll('.tbl tr'),function(r){return r.textContent.indexOf(" + JSON.stringify(A) + ")>=0;}).length>0");
+      if (!onBoard) await sleep(300);
+    }
+  }
+  ok(onBoard, '赋分台已切到本测试班（' + CLA + '）');
 
   console.log('\n-- 1. 批量条与勾选框都在，初始没选中');
   const init = await ev("(function(){var bar=document.querySelector('.bulk-bar');var allCb=document.querySelector('.tbl th input[type=checkbox]');var cbs=document.querySelectorAll('.tbl tr td input[type=checkbox]');return {bar:!!bar,text:bar?bar.textContent:'',allCb:!!allCb,n:cbs.length,apply:document.querySelector('.bulk-apply').disabled,zeroTxt:document.querySelector('.bulk-zero').textContent,zeroDis:document.querySelector('.bulk-zero').disabled};})()");
@@ -121,7 +134,16 @@ function mk(ws) {
 
   console.log('\n-- 3. 一键给没交的记 0 分');
   await ev("document.querySelector('.bulk-zero').click()");
-  await sleep(1600);
+  // 一键记 0 分要打一圈接口再重画整张表，慢的时候 1.6 秒还没画完 —— 等被记 0 分的那两行真的变绿再读
+  // （甲是「已交未赋分」，本来就该一直是橙的，所以只能盯乙丙，不能等「没有橙行」）
+  for (let k = 0; k < 20; k++) {
+    const done = await ev("[].filter.call(document.querySelectorAll('.tbl tr'),function(r){"
+      + "return (r.textContent.indexOf(" + JSON.stringify(B) + ")>=0 || r.textContent.indexOf(" + JSON.stringify(C) + ")>=0)"
+      + " && r.className.indexOf('row-scored')>=0;}).length===2");
+    if (done) break;
+    await sleep(300);
+  }
+  await sleep(300);
   const rows = await ev("(function(){var out={};[].forEach.call(document.querySelectorAll('.tbl tr'),function(r){var cbs=r.querySelector('td input[type=checkbox]');if(!cbs)return;var nm=r.querySelector('td').textContent.replace(/\s+/g,' ').trim();out[nm]={cls:r.className,text:r.textContent.replace(/\s+/g,' ')};});return out;})()");
   const key = (n) => Object.keys(rows).filter((k) => k.indexOf(n) >= 0)[0];
   const rb = rows[key(B)] || {}, rc = rows[key(C)] || {}, ra = rows[key(A)] || {}, rd = rows[key(D)] || {};

@@ -188,6 +188,9 @@ function register(router, { store, config }) {
     if (!lesson) return fail(res, 404, '没有这份检测卷');
     if (!lesson.sheet) return fail(res, 404, '本课没有课内任务单');
     const sh = store.sheetStat(stu.uid, lesson.id);
+    // 老师给的分（p.marks）：只回自己的。tasks 是老师逐题的「对/错」判定，
+    // 老数据只有总分没有 tasks → 前端只说「老师给了 X 分」，不假装逐题标过。
+    const mk = store.markStat(stu.uid, lesson.id);
     ok(res, {
       lessonId: lesson.id, title: lessonName(lesson),
       sheet: publicSheet(lesson.sheet),
@@ -196,6 +199,14 @@ function register(router, { store, config }) {
       // 系统按任务判的结果（哪几个任务对、哪几格错）：拿存着的作答实时重算，
       // 不落盘 —— 老师改了题/改了任务划分，学生下次打开看到的就是新的，不会有陈旧分。
       auto: autoOf(lesson, store.lastSheetRows(stu.uid, lesson.id)),
+      // 本课任务单满分（＝几个任务）：学生端「老师给了 X / N 分」要用它。
+      // 任务单定义里的 taskCount 不在下发白名单里（学生不需要知道题目结构），单独给一个数。
+      taskFull: sheetTaskCount(lesson.sheet),
+      mark: mk ? {
+        score: typeof mk.score === 'number' ? mk.score : null,
+        at: mk.at || null,
+        tasks: store.taskMarks(stu.uid, lesson.id, sheetTaskCount(lesson.sheet)),
+      } : null,
       mates: classMateStatus(store, stu, lesson.id),
     });
   });

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>课堂答题 · 信息科技</title>
-<link rel="stylesheet" href="styles.css?v=25">
+<link rel="stylesheet" href="styles.css?v=26">
 </head>
 <body>
 <header class="topbar">
@@ -57,6 +57,7 @@
 
   <!-- 视图：课内任务单（开放填写，可反复保存）。
        带标准答案的课会按任务判分（一个任务 1 分），结果落在 #sheetAuto；
+       老师逐题点过「✓对/✗错」的结果落在 #sheetTeach（只给总分的老记录只说总分）；
        左侧是本班「这一课交没交」名单 -->
   <section id="view-sheet" hidden>
     <div class="sheet-layout">
@@ -64,6 +65,7 @@
       <div class="sheet-main">
         <div class="card" id="sheetHeader"></div>
         <div id="sheetAuto" hidden></div>
+        <div id="sheetTeach" hidden></div>
         <div id="sheetBody"></div>
         <div class="submit-bar"><div class="inner">
           <div class="done-note" id="sheetNote" style="flex:1"></div>
@@ -81,6 +83,6 @@
 </div>
 
 <script src="flowchart.js?v=12"></script>
-<script src="quiz.js?v=24"></script>
+<script src="quiz.js?v=25"></script>
 </body>
 </html>

@@ -8,6 +8,12 @@
 //     没写 keys 的格子＝系统不判（如任务二的算式），留给老师看，会在结果里标出来。
 //   · 板块写 matchBy —— 答案按「某一列选了什么」来查（如任务一：先选程序，再看它的功能和体会对不对）。
 //     这样学生把四行程序换个顺序填也不会误判。keys 这时按那一列的值给：{'在线打字':{func:'…'}}。
+//   · 板块写 rowTask —— 「一行一题」的表：{0:1,1:2,2:3}，把同一张表的每一行算成各自的任务
+//     （四上第1课三行自由填写＝三条各 1 分）。不写就把整个板块当一个任务。
+//   · 板块写 fillThrough —— 给「枚举到答案为止」这类长表用：'c13' 表示学生至少要做完这一列，
+//     这一列（含）之前的空格算错；这一列之后的空格算「还没做到那一步」，不判错也不判对。
+//     六上第3课那张 36 列的枚举表就靠它——真实 122 份提交里 46 人正好填到答案列就停了，
+//     那是枚举法的正常做法，不能判错（详见 tools/seed.js 里 G6L3_TASK1 的注释）。
 // ⚠️ 系统评分只用来「告诉学生哪个任务错了」和「给老师一个参考分」，
 //    证书里的任务单得分仍然只认老师赋的分（p.marks）——否则学生反复重交就能把分刷满。
 const { normalizeText } = require('./normalize.js');
@@ -69,12 +75,25 @@ function specOf(block) {
       return byVal[key] || {};      // 选了不在表里的程序 → 也当没有答案
     };
   }
-  return (unit) => k[unit.ri] || {};
+  // 流程图整块只有一行，按答案时固定取第 0 行（walkRows 给它的 ri 是 -1，直接取会永远查不到答案）
+  return (unit) => k[unit.flow ? 0 : unit.ri] || {};
 }
 
-// 某个板块属于第几个任务：没写 task 就按板块序号（＝旧口径「一个板块一题」）
-function taskNoOf(block, bi) {
-  return (typeof block.task === 'number' && block.task > 0) ? block.task : bi + 1;
+// 某个板块属于第几个任务：
+//   ① 板块写了 rowTask 且这一行有对应任务号 → 用行上的（「一行一题」的表）
+//   ② 板块写了 task → 用板块的（几个板块合起来算一个任务）
+//   ③ 都没写 → 按板块序号（＝旧口径「一个板块一题」）
+function taskNoOf(block, bi, unit) {
+  const rt = block.rowTask;
+  if (rt && unit && typeof rt[unit.ri] === 'number' && rt[unit.ri] > 0) return rt[unit.ri];
+  if (typeof block.task === 'number' && block.task > 0) return block.task;
+  return bi + 1;
+}
+
+// fillThrough 写的是列 key（如 'c13'），换成这一列的序号；没写或写错返回 -1（＝不启用这条规则）
+function fillThroughIndex(block) {
+  if (!block.fillThrough) return -1;
+  return (block.cols || []).map((c) => c.key).indexOf(block.fillThrough);
 }
 
 // 任务名：优先用 sheet.tasks[任务号-1]，否则退到这一任务第一个板块的 caption / heading
@@ -95,7 +114,7 @@ function gradeSheet(sheet, rows) {
 
   const units = walkRows(sheet);
   // 每个可填行归到哪个任务
-  units.forEach((u) => { u.no = taskNoOf(u.block, u.bi); });
+  units.forEach((u) => { u.no = taskNoOf(u.block, u.bi, u); });
 
   const taskMap = new Map();
   const order = [];
@@ -175,11 +194,14 @@ function gradeSheet(sheet, rows) {
       });
       return;
     }
+    const through = fillThroughIndex(b);   // -1 ＝这个板块没设「必须填到哪一列」
     grp.units.forEach((u) => {
       const row = byRow[u.i] || null;
       const want0 = spec ? spec(u, row) : null;
       fillableCols(u).forEach((c) => {
         const mine = row ? (row[c.key] || '') : '';
+        // 长表（如 36 列枚举表）：最后一格做到的第 N 列之后的空格＝「还没做到那一步」，不算错
+        if (through >= 0 && !String(mine == null ? '' : mine).trim() && u.cols.indexOf(c) > through) return;
         const want = want0 ? want0[c.key] : undefined;
         if (want === undefined) keepManual(u, c, mine);
         else mark(u, c, mine, want);
@@ -225,4 +247,15 @@ function studentView(g) {
   };
 }
 
-module.exports = { gradeSheet, studentView, walkRows };
+// 这一课有几个任务、各叫什么 —— 教师端「逐题打勾/打叉」那一排按钮就按它渲染。
+// 只看任务单定义，不看谁交了没交：没交的学生也要能赋分。
+function taskTitles(sheet) {
+  if (!sheet) return [];
+  const units = walkRows(sheet);
+  units.forEach((u) => { u.no = taskNoOf(u.block, u.bi, u); });
+  const nos = [];
+  units.forEach((u) => { if (nos.indexOf(u.no) < 0) nos.push(u.no); });
+  return nos.map((no) => ({ no, title: taskTitle(sheet, no, units) }));
+}
+
+module.exports = { gradeSheet, studentView, walkRows, taskTitles };

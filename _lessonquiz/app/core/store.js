@@ -132,11 +132,27 @@ class Store {
     if (!p || !p.certs || !p.certs[lessonId]) return null;
     return p.certs[lessonId];
   }
-  // 某生某课「任务单教师评分」记录（教师评 0–10 整数，存于 p.marks；老文件无该键 → null）
+  // 某生某课「任务单教师评分」记录（一题 1 分、满分＝本课任务数，存于 p.marks；老文件无该键 → null）
+  // 形状：{score, at, tasks?} —— tasks 是逐题判定 {任务号: true|false}「一题一改赋分」（2026-09-29）。
   markStat(uid, lessonId) {
     const p = this.progress[uid];
     if (!p || !p.marks || !p.marks[lessonId]) return null;
     return p.marks[lessonId];
+  }
+  // 某生某课的「逐题判定」，已按本课任务数过滤掉越界的任务号。
+  // 为什么要过滤：任务号可能因为后来改任务单而失效（比如 6-1-4 从 6 个板块并成 3 个任务），
+  // 留着这种孤儿键会让"打勾的个数"超过本课满分——证书那边钳过、期末汇总那边没钳，两边就对不上了。
+  taskMarks(uid, lessonId, taskFull) {
+    const m = this.markStat(uid, lessonId);
+    const t = m && m.tasks;
+    if (!t || typeof t !== 'object') return null;
+    const out = {};
+    Object.keys(t).forEach((k) => {
+      const no = Number(k);
+      if (!Number.isInteger(no) || no < 1 || (taskFull && no > taskFull)) return;
+      out[no] = !!t[k];
+    });
+    return Object.keys(out).length ? out : null;
   }
 }
 

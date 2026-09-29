@@ -370,6 +370,9 @@
     try { j = await api('/api/teacher/sheet-board/' + encodeURIComponent(id) + q); }
     catch (e) { toast(e.message); return; }
     const taskFull = j.lesson.taskFull || 1;   // 本课任务单共几题 = 赋分上限
+    // 这一课的任务清单 [{no,title}]：逐题「✓对/✗错」那一排按钮按它渲染。
+    // 用课程定义而不是学生身上的 auto —— 没交任务单的学生 auto 是 null，老师照样要能逐题给分。
+    const taskList = (j.lesson && j.lesson.tasks) || [];
     const body = $('tabBody'); body.innerHTML = '';
     const back = el('button', 'btn ghost', '← 返回各课情况');
     back.onclick = () => { cur = 'overview'; paintTabs(); loadTab(); };
@@ -421,7 +424,8 @@
       if (!uids.length) { toast('没有选中学生'); return; }
       try {
         const r = await api('/api/teacher/sheet-board/' + encodeURIComponent(id) + '/score-batch', 'POST', { uids, score });
-        (r.rows || []).forEach((x) => { const set = byUid[x.uid]; if (set) set(x.score, x.scoredAt, x.termScore); });
+        // 批量记分/清除会把逐题标记一起作废，接口回的 tasks 恒为 null → 连带把那一排勾清掉
+        (r.rows || []).forEach((x) => { const set = byUid[x.uid]; if (set) set(x.score, x.scoredAt, x.termScore, null); });
         picked.clear(); refreshBulk();
         let msg = (score === '') ? ('已清除 ' + r.updated + ' 人的评分') : ('已给 ' + r.updated + ' 人记 ' + score + ' 分');
         if (r.skipped) msg += '（' + r.skipped + ' 人不在名单里，已跳过）';
@@ -545,14 +549,19 @@
       inp.value = (s.score != null) ? String(s.score) : '';
       inp.placeholder = s.score == null ? ('0–' + taskFull) : '';
       let saving = false;
+      let paintTasks = () => {};   // 逐题按钮条建好后接管（applyScore 比它先定义，所以先占个位）
       // 单人赋分与批量赋分共用的落地点：把分数写回这一行（输入框 / 赋分时间 / 学期累计 / 行底色一起刷）
-      const applyScore = (score, scoredAt, termScore) => {
+      // tasks：老师逐题的判定 {任务号: true|false}，或 null＝这条记录没有逐题标记（老数据/直接填总分）。
+      //        传 undefined 表示「这次响应不带逐题信息」，那就别动现有的勾。
+      const applyScore = (score, scoredAt, termScore, tasks) => {
         s.score = score;
         if (scoredAt !== undefined) s.scoredAt = scoredAt;
+        if (tasks !== undefined) s.taskMarks = tasks;
         inp.value = score == null ? '' : String(score);
         inp.placeholder = score == null ? ('0–' + taskFull) : '';
         if (termScore != null) term.textContent = String(termScore);
         paint();
+        paintTasks();
       };
       byUid[s.uid] = applyScore;
       const commit = async () => {
@@ -582,28 +591,111 @@
       };
       scWrap.appendChild(inp); scWrap.appendChild(clearBtn);
       sc.appendChild(scWrap);
-      // 系统按任务判的分：老师一眼看出这个学生是哪个任务错了，点一下就按系统的分填上，
-      // 觉得系统判得不对（比如任务二的算式写得乱）就自己改，最后仍以老师填的为准。
-      if (s.auto && s.auto.graded) {
-        const sysLine = el('div', 'sys-line');
-        sysLine.appendChild(el('span', 'muted', '系统 '));
-        const sysB = el('b', null, s.auto.score + '/' + s.auto.taskFull);
-        sysB.style.color = s.auto.score === s.auto.taskFull ? 'var(--ok)' : 'var(--bad)';
-        sysLine.appendChild(sysB);
-        (s.auto.tasks || []).forEach((t) => {
-          const sp = el('span', 'sys-task ' + (t.ok === true ? 'st-ok' : (t.ok === false ? 'st-no' : 'st-skip')),
-            '任务' + '①②③④⑤⑥⑦⑧⑨'[t.no - 1] + (t.ok === true ? '✅' : (t.ok === false ? '❌' : '➖')));
-          sysLine.appendChild(sp);
-        });
-        if (s.auto.manual && s.auto.manual.length) {
-          sysLine.appendChild(el('span', 'muted', '（另有 ' + s.auto.manual.length + ' 处要老师看）'));
+      // ---- 逐题「✓对 / ✗错」按钮条（一题一改赋分，2026-09-29 老师口径）----
+      // 每个任务一个按钮，点一下循环：未标 → ✓对 → ✗错 → 未标（再点一下＝撤销这一题的判定）。
+      // 系统判得出的任务先按系统预选（虚框、title 注明「系统判」）；老师一改就变成老师自己的判定（实框）。
+      // 总分恒定＝打勾的个数，所以证书百分比、期末汇总那条链路一个字都不改。
+      const CIRC = '①②③④⑤⑥⑦⑧⑨';
+      const bar = el('div', 'sys-line');
+      // 注意：判定表直接读 s.taskMarks，不要再抄一份到局部变量里——
+      // applyScore() 更新的是 s.taskMarks，抄一份就会变成「总分变了、按钮还停在旧判定」。
+      let busy = false;
+      const autoTask = (no) => (((s.auto && s.auto.tasks) || []).filter((x) => x.no === no)[0]) || null;
+      // 这一题「现在显示成什么」：老师判过就用老师的，否则用系统的（系统也判不了就是未标）。
+      // src='sys' 表示「这一格的值和系统的判定一致（老师没改过它）」——所以按钮画成虚框，
+      // 老师改过的那几题画实框，一眼能看出自己动了哪几题。
+      const shownOf = (no) => {
+        const t = autoTask(no);
+        const sysV = (t && t.graded) ? (t.ok === true) : null;
+        const mine = (s.taskMarks && typeof s.taskMarks[no] === 'boolean') ? s.taskMarks[no] : null;
+        if (mine === null) return sysV === null ? { v: null, src: 'none' } : { v: sysV, src: 'sys' };
+        return { v: mine, src: (sysV !== null && sysV === mine) ? 'sys' : 'teacher' };
+      };
+      // 老师直接往左边填了总分、或批量记分 → 服务端会把逐题标记作废，这里就退回「只显示系统判」
+      const list = taskList.length
+        ? taskList
+        : (((s.auto && s.auto.tasks) || []).map((t) => ({ no: t.no, title: t.title })));
+      if (list.length) {
+        if (s.auto && s.auto.graded) {
+          bar.appendChild(el('span', 'muted', '系统 '));
+          const sysB = el('b', null, s.auto.score + '/' + s.auto.taskFull);
+          sysB.style.color = s.auto.score === s.auto.taskFull ? 'var(--ok)' : 'var(--bad)';
+          bar.appendChild(sysB);
         }
-        const fillBtn = el('button', 'btn ghost sys-fill', '按系统分填 ' + s.auto.score);
-        fillBtn.style.padding = '1px 6px'; fillBtn.style.fontSize = '11px';
-        fillBtn.title = '把系统判的分填进左边的输入框（仍可自己改）';
-        fillBtn.onclick = () => { inp.value = String(s.auto.score); commit(); };
-        sysLine.appendChild(fillBtn);
-        sc.appendChild(sysLine);
+        const btns = list.map((t) => {
+          const b = el('button', 'sys-task');
+          b.type = 'button';
+          b._t = t;
+          b.onclick = async () => {
+            if (busy) return; busy = true;
+            const cur = shownOf(t.no);
+            const next = cur.v === null ? true : (cur.v === true ? false : null);
+            try {
+              // 关键：一次把「所有能定的题」整张表都写下去，而不是只写点中的这一题。
+              // 只写这一题的话，系统预选的那几题在服务端还是空的，点一下总分就从 3 掉成 0；
+              // 整张表覆盖 = 老师看到的勾和落盘的分永远一致。
+              const map = {};
+              list.forEach((x) => {
+                const v = shownOf(x.no);
+                if (x.no !== t.no && v.v !== null) map[x.no] = v.v;
+              });
+              if (next !== null) map[t.no] = next;
+              const r = await api('/api/teacher/sheet-board/' + encodeURIComponent(id) + '/task', 'POST',
+                { uid: s.uid, tasks: map });
+              applyScore(r.score, r.scoredAt, r.termScore, r.tasks);
+              toast('已把 ' + s.name + ' 的任务' + CIRC[t.no - 1] + ' 标为'
+                + (next === true ? '「✓对」' : (next === false ? '「✗错」' : '「未标」'))
+                + '，本课共 ' + r.score + ' 分');
+            } catch (e) { toast('逐题赋分失败：' + e.message); }
+            busy = false;
+          };
+          bar.appendChild(b);
+          return b;
+        });
+        const srcText = (cur) => (cur.src === 'teacher'
+          ? (cur.v ? '老师判为「对」' : '老师判为「错」')
+          : (cur.src === 'sys' ? '这一题和系统的判定一致（' + (cur.v ? '对' : '错') + '）'
+            : '系统也判不了（自由填写），等老师判'));
+        paintTasks = () => {
+          btns.forEach((b) => {
+            const t = b._t;
+            const cur = shownOf(t.no);
+            b.className = 'sys-task '
+              + (cur.v === true ? 'st-ok' : (cur.v === false ? 'st-no' : 'st-skip'))
+              + (cur.src === 'sys' ? ' st-sys' : (cur.src === 'teacher' ? ' st-teacher' : ''));
+            b.textContent = '任务' + CIRC[t.no - 1] + (cur.v === true ? '✅' : (cur.v === false ? '❌' : '➖'));
+            b.title = (t.title ? t.title + '：' : '') + srcText(cur) + '。点一下'
+              + (cur.v === null ? '标为「✓对」' : (cur.v === true ? '改成「✗错」' : '撤销（回到未标）'));
+          });
+        };
+        paintTasks();
+        if (s.auto && s.auto.graded) {
+          if (s.auto.manual && s.auto.manual.length) {
+            bar.appendChild(el('span', 'muted', '（另有 ' + s.auto.manual.length + ' 处要老师看）'));
+          }
+          // 一键采纳系统：逐题把系统的判定记下来（系统判不了的题留空不记），而不是只填一个总分——
+          // 这样落盘的还是「哪题对哪题错」，证书那条链路照样只看总分。
+          const fillBtn = el('button', 'btn ghost sys-fill', '按系统分填 ' + s.auto.score);
+          fillBtn.style.padding = '1px 6px'; fillBtn.style.fontSize = '11px';
+          fillBtn.title = '把系统能判的题按系统的判定逐题记下来（系统判不了的题留空，等老师判）；会盖掉你刚才手改的那几题';
+          fillBtn.onclick = async () => {
+            if (busy) return; busy = true;
+            const map = {};
+            list.forEach((t) => { const a = autoTask(t.no); if (a && a.graded) map[t.no] = a.ok === true; });
+            try {
+              const r = await api('/api/teacher/sheet-board/' + encodeURIComponent(id) + '/task', 'POST',
+                { uid: s.uid, tasks: map });
+              applyScore(r.score, r.scoredAt, r.termScore, r.tasks);
+              toast('已按系统的判定给 ' + s.name + ' 逐题打勾 ' + Object.keys(map).length
+                + ' 题，共 ' + r.score + ' 分');
+            } catch (e) { toast('按系统分填失败：' + e.message); }
+            busy = false;
+          };
+          bar.appendChild(fillBtn);
+        } else {
+          bar.appendChild(el('span', 'muted', '老师逐题点 ✓/✗'));
+        }
+        sc.appendChild(bar);
       }
       sc.appendChild(stamped);    // 「赋分于 9/22 15:41」
       sc.appendChild(certHint);   // 「证书 X% · Y 星」，赋分后当场出现

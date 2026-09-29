@@ -230,6 +230,15 @@ table.sheet-table { margin-top: 6px; }
 .auto-item.auto-no .auto-note { color: var(--bad); }
 .auto-hint { margin-top: 8px; font-size: 12.5px; color: var(--bad); background: #fdf1f1; border-radius: 8px; padding: 7px 9px; }
 .auto-hint-ok { color: var(--green-dk); background: var(--green-lt); }
+/* 任务单「老师的评分」：老师逐题点过「✓对/✗错」就逐题列出来（每行右边还会写系统的判定做对照）。
+   和上面的「系统判分」左右分得开：卡片左边一道绿色竖条，一眼知道这块是老师给的。 */
+.teach-card { padding: 10px 12px; border-left: 4px solid var(--green); }
+.teach-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; }
+.teach-head b { font-size: 14px; }
+.teach-score { font-weight: 700; color: var(--green-dk); }
+.teach-head .muted { font-size: 12px; }
+.teach-hint { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.teach-list .auto-note { color: var(--ink-2); }
 /* 判错的格子打红框（答题时就地提示，改完重交会重新判） */
 .sheet-cell.sheet-wrong { border-color: var(--bad); background: #fdf1f1; box-shadow: 0 0 0 1px var(--bad) inset; }
 /* 多板块任务单：一个任务单里放活动一/二/三，每板块一张表 */
@@ -292,10 +301,16 @@ input.score-in { width: 62px; padding: 5px 4px; font-size: 14px; text-align: cen
 
 /* 赋分台里的「系统按任务判分」：行内小标签（任务①✅）+ 展开内容顶部的判定条 + 判错的格子 */
 .sys-line { font-size: 11px; margin-top: 3px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-.sys-task { font-size: 11px; padding: 0 4px; border-radius: 6px; white-space: nowrap; }
+/* 逐题「✓对/✗错」按钮（2026-09-29 一题一改赋分）：点一下 未标→对→错→未标。
+   虚框＝还只是系统的判定（老师没确认过），实框＝老师自己判的 —— 一眼分得清谁说的。 */
+.sys-task { font-size: 11px; padding: 0 4px; border-radius: 6px; white-space: nowrap;
+  font-family: inherit; line-height: 16px; cursor: pointer; background: #fff;
+  border: 1px dashed #cfd6d0; color: var(--ink-2); }
+.sys-task:hover { border-color: var(--green); }
 .sys-task.st-ok { color: var(--ok); background: #eef9f0; }
 .sys-task.st-no { color: var(--bad); background: #fdf1f1; font-weight: 700; }
 .sys-task.st-skip { color: var(--ink-2); background: #f2f4f2; }
+.sys-task.st-teacher { border-style: solid; border-color: currentColor; }
 .sys-bar { font-size: 12px; margin: 2px 0 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .sys-bar .muted { font-size: 11.5px; }
 .tbl td.td-wrong { background: #fdf1f1; }
