@@ -22,6 +22,18 @@ function ensureProgress(store, name) {
   return store.progress[name];
 }
 
+// 分段完成状态：每天拆「基础关」（前 baseSize 题，做完即当天打卡达标）与
+// 「进阶关」（其余题，选做加分）。老记录没有 segs 字段，按"整份已完成"解释，保证历史数据语义不变。
+function segStatus(d, config) {
+  const segs = d.segs || {};
+  const legacy = !d.segs;
+  const allDone = !!segs.all;
+  const baseDone = !!segs.base || allDone || (legacy && !!d.done);
+  const restDone = !!segs.rest || allDone || (legacy && !!d.done);
+  const full = allDone || (baseDone && restDone);
+  return { baseDone, restDone, full };
+}
+
 function recomputeStats(p) {
   let doneDays = 0, totalScore = 0;
   for (const d of Object.values(p.days)) {
@@ -176,11 +188,17 @@ function register(router, ctx) {
     const p = auth(req, res);
     if (!p) return;
     ok(res, {
-      totalDays: config.totalDays, daySize: config.daySize, scorePerQuestion: config.scorePerQuestion,
+      totalDays: config.totalDays, daySize: config.daySize,
+      baseSize: config.baseSize, scorePerQuestion: config.scorePerQuestion,
       nextDay: p.nextDay,
-      days: Object.entries(p.days).map(([day, d]) => ({
-        day: Number(day), done: !!d.done, score: d.score || 0, submittedAt: d.submittedAt || null,
-      })),
+      days: Object.entries(p.days).map(([day, d]) => {
+        const st = segStatus(d, config);
+        return {
+          day: Number(day), done: !!d.done,
+          full: st.full, baseDone: st.baseDone, restDone: st.restDone,
+          score: d.score || 0, total: d.total || 0, submittedAt: d.submittedAt || null,
+        };
+      }),
     });
   });
 
@@ -191,33 +209,56 @@ function register(router, ctx) {
     if (!(day >= 1 && day <= config.totalDays)) return fail(res, 400, '关卡不存在');
     if (day > p.nextDay) return fail(res, 403, '请先完成前面的关卡');
 
+    const segOf = (idx) => (idx < config.baseSize ? 'base' : 'rest');
+
     const existing = p.days[day];
     if (existing) {
-      const questions = existing.qids.map((id) => {
+      const st = segStatus(existing, config);
+      const questions = existing.qids.map((id, idx) => {
         const q = bank.getById(id);
         if (!q) return null;
-        return existing.done
-          ? {
-              ...publicQuestion(q),
-              correct: !!existing.results[id],
-              studentAnswer: existing.answers[id] != null ? existing.answers[id] : '',
-              correctAnswer: displayOf(q),
-              expl: q.expl || '',
-            }
-          : publicQuestion(q);
+        const seg = segOf(idx);
+        const answered = Object.prototype.hasOwnProperty.call(existing.results || {}, id);
+        if (!answered) return { ...publicQuestion(q), seg, answered: false };
+        return {
+          ...publicQuestion(q), seg, answered: true,
+          correct: !!existing.results[id],
+          studentAnswer: existing.answers[id] != null ? existing.answers[id] : '',
+          correctAnswer: displayOf(q),
+          expl: q.expl || '',
+        };
       }).filter(Boolean);
-      return ok(res, { done: !!existing.done, score: existing.score || 0, questions });
+      return ok(res, {
+        done: !!existing.done, full: st.full,
+        baseDone: st.baseDone, restDone: st.restDone,
+        score: existing.score || 0, correct: existing.correct || 0, total: existing.total || 0,
+        daySize: config.daySize, baseSize: config.baseSize,
+        questions,
+      });
     }
 
     // 首次打开 → 冻结当天题目（确定性，刷新不变）
     let frozen = null;
     await store.mutate(() => {
       const ids = select.pickDaily(p, day);
-      p.days[day] = { startedAt: new Date().toISOString(), qids: ids, answers: {}, results: {}, done: false, correct: 0, total: 0, score: 0 };
+      p.days[day] = {
+        startedAt: new Date().toISOString(), qids: ids,
+        answers: {}, results: {}, segs: {},
+        done: false, full: false, correct: 0, total: 0, score: 0,
+      };
       store.saveProgress(p.name);
       frozen = ids;
     });
-    ok(res, { done: false, questions: frozen.map((id) => publicQuestion(bank.getById(id))).filter(Boolean) });
+    ok(res, {
+      done: false, full: false, baseDone: false, restDone: false,
+      score: 0, correct: 0, total: 0,
+      daySize: config.daySize, baseSize: config.baseSize,
+      questions: frozen.map((id, idx) => {
+        const q = bank.getById(id);
+        if (!q) return null;
+        return { ...publicQuestion(q), seg: segOf(idx), answered: false };
+      }).filter(Boolean),
+    });
   });
 
   router.add('POST', '/api/student/daily/:day/submit', async (req, res, ctx, params) => {
@@ -227,48 +268,68 @@ function register(router, ctx) {
     if (!(day >= 1 && day <= config.totalDays)) return fail(res, 400, '关卡不存在');
     if (day > p.nextDay) return fail(res, 403, '请先完成前面的关卡');
 
-    if (p.days[day] && p.days[day].done) {
-      // 幂等：重复提交返回既有记录
-      const d = p.days[day];
-      return ok(res, {
-        replay: true, done: true, score: d.score, correct: d.correct, total: d.total,
-        nextDay: p.nextDay, results: d.resultsList || [],
-      });
-    }
-
     const body = await readBody(req, 512 * 1024);
     const d = p.days[day];
     if (!d || !d.qids) return fail(res, 400, '请先打开今日练习');
 
-    const bankQs = d.qids.map((id) => bank.getById(id)).filter(Boolean);
-    const results = gradeList(bankQs, body.answers);
-    const correct = results.filter((r) => r.correct).length;
-    const total = results.length;
-    const score = total >= config.daySize
-      ? correct * config.scorePerQuestion
-      : Math.round((correct / total) * 100);
+    // seg: 'base' 只交基础关 | 'rest' 只交进阶关 | 缺省 'all' 整份提交（兼容老客户端）
+    const seg = (body.seg === 'base' || body.seg === 'rest') ? body.seg : 'all';
+    d.segs = d.segs || {};
 
-    const resultsList = results.map(({ q, options, ...rest }) => rest);
+    // 幂等：该段已提交过就返回既有记录（不能整份判，否则"基础关之后补交进阶关"会被挡掉）
+    if (d.segs[seg] || (seg === 'all' && segStatus(d, config).full)) {
+      const st = segStatus(d, config);
+      return ok(res, {
+        replay: true, seg, done: !!d.done, full: st.full,
+        score: d.score || 0, correct: d.correct || 0, total: d.total || 0,
+        dayScore: d.score || 0, dayCorrect: d.correct || 0, dayTotal: d.total || 0,
+        nextDay: p.nextDay, results: d.resultsList || [],
+      });
+    }
+
+    // 本段要批改的题：基础关＝前 baseSize 题，进阶关＝其余，all＝全部
+    const segIds = seg === 'base' ? d.qids.slice(0, config.baseSize)
+      : seg === 'rest' ? d.qids.slice(config.baseSize)
+        : d.qids.slice();
+    const segQs = segIds.map((id) => bank.getById(id)).filter(Boolean);
+    const results = gradeList(segQs, body.answers);
+    const newList = results.map(({ q, options, ...rest }) => rest);
+    const segCorrect = results.filter((r) => r.correct).length;
+
     await store.mutate(() => {
-      d.answers = {};
+      // 合并累加：后交的段不能把先前那段的答案/成绩覆盖掉
       for (const a of (body.answers || [])) d.answers[a.id] = a.answer;
-      d.results = {};
       for (const r of results) d.results[r.id] = r.correct;
-      d.correct = correct; d.total = total; d.score = score;
-      d.done = true; d.submittedAt = new Date().toISOString();
-      d.resultsList = resultsList;
+      d.segs[seg] = { at: new Date().toISOString(), correct: segCorrect, total: results.length };
+      d.correct = Object.keys(d.results).filter((id) => d.results[id]).length;
+      d.total = Object.keys(d.results).length;
+      // 一律每题固定分值：基础关满分 baseSize×2、进阶关补足到 daySize×2，合计与原口径一致
+      d.score = d.correct * config.scorePerQuestion;
+      const byId = new Map((d.resultsList || []).map((x) => [x.id, x]));
+      for (const x of newList) byId.set(x.id, x);
+      d.resultsList = [...byId.values()];
+      d.submittedAt = new Date().toISOString();
+
       updateWrongBank(p, results);
-      for (const id of d.qids) { if (!p.usedSet.includes(id)) p.usedSet.push(id); }
-      p.nextDay = Math.min(config.totalDays + 1, Math.max(p.nextDay, day + 1));
+      // 只把本次真正做过的题记入已用题库，未做的题留给以后
+      for (const r of results) { if (!p.usedSet.includes(r.id)) p.usedSet.push(r.id); }
+
+      const st = segStatus(d, config);
+      d.done = st.baseDone;      // 基础关交了就当天达标
+      d.full = st.full;
+      if (d.done) p.nextDay = Math.min(config.totalDays + 1, Math.max(p.nextDay, day + 1));
       recomputeStats(p);
       store.saveProgress(p.name);
     });
 
     ok(res, {
-      done: true, score, correct, total,
+      seg, replay: false, done: !!d.done, full: segStatus(d, config).full,
+      score: d.score, correct: d.correct, total: d.total,
+      segScore: segCorrect * config.scorePerQuestion, segCorrect, segTotal: results.length,
+      dayScore: d.score, dayCorrect: d.correct, dayTotal: d.total,
       nextDay: p.nextDay,
       allDone: p.nextDay > config.totalDays,
-      results: resultsList,
+      results: newList,
     });
   });
 

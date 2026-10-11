@@ -83,6 +83,7 @@ tr:hover td { background: #f6faf3; }
   background: #edf2e8; color: var(--muted); cursor: pointer; border: none;
 }
 .day-cell.done { background: #d5e9d8; color: var(--success); font-weight: 600; }
+.day-cell.full { background: #fbe7bd; color: #9a6200; font-weight: 700; }
 .day-cell.today { background: var(--primary); color: #fff; font-weight: 700; }
 .day-cell.locked { opacity: .5; }
 .day-cell .sc { font-size: 10px; display: block; }

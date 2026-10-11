@@ -11,6 +11,7 @@ const CONFIG = {
   // 打卡规则
   totalDays: 50,
   daySize: 50,
+  baseSize: 10,          // 基础关题数（做完成即算当天打卡达标，照顾不同能力的学生）
   scorePerQuestion: 2,
 
   // 学生统一登录密码

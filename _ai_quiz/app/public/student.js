@@ -72,6 +72,13 @@ $('#mainNav').addEventListener('click', (e) => {
 });
 
 // ---------------- 每日打卡 ----------------
+// 目标线徽章（累计完成天数，不要求连续）
+const BADGES = [
+  { days: 10, icon: '🌱', name: '启程之星' },
+  { days: 25, icon: '🔥', name: '坚持之星' },
+  { days: 50, icon: '🏆', name: '登顶之星' },
+];
+
 async function renderDaily() {
   view.innerHTML = '<p class="tip">加载中…</p>';
   try {
@@ -79,12 +86,27 @@ async function renderDaily() {
     const dayMap = {};
     r.days.forEach((d) => { dayMap[d.day] = d; });
     const nextDay = Math.min(r.nextDay, r.totalDays);
+    const baseSize = r.baseSize || 10;
+    const fullSize = r.daySize || 50;
+    const restSize = Math.max(0, fullSize - baseSize);
     const doneCount = Object.values(dayMap).filter((d) => d.done).length;
+    const fullCount = Object.values(dayMap).filter((d) => d.full).length;
+    const pct = Math.min(100, Math.round((doneCount / r.totalDays) * 100));
+
+    const badgeHtml = BADGES.map((b) => {
+      const got = doneCount >= b.days;
+      return `<span class="badge ${got ? 'ok' : 'info'}">${b.icon} ${b.name} ${b.days}天${got ? ' ✓' : ''}</span>`;
+    }).join(' ');
 
     let html = `<div class="card">
       <div class="row"><div class="grow"><h3>📅 每日打卡闯关</h3>
-      <p class="tip">共 ${r.totalDays} 天 · 每天 ${r.daySize} 题 · 每题 ${r.scorePerQuestion} 分</p></div>
-      <div><span class="badge info">已完成 ${doneCount} 天</span></div></div>
+      <p class="tip">共 ${r.totalDays} 天 · 每天 ${fullSize} 题（基础关 ${baseSize} 题 + 进阶关 ${restSize} 题）· 每题 ${r.scorePerQuestion} 分</p></div>
+      <div><span class="badge info">达标 ${doneCount} 天</span> <span class="badge ok">满分 ${fullCount} 天</span></div></div>
+      <div class="mt" style="background:#e9e9ef;border-radius:8px;height:10px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:var(--primary,#3A7D44);"></div>
+      </div>
+      <p class="tip mt">累计完成 ${doneCount} / ${r.totalDays} 天（${pct}%）——<b>做完每天的基础关 ${baseSize} 题，就算当天打卡完成</b>，剩下的题想做再补。</p>
+      <div class="row mt" style="flex-wrap:wrap;gap:6px;">${badgeHtml}</div>
     </div>`;
 
     html += `<div class="card"><div class="grid-days">`;
@@ -92,48 +114,85 @@ async function renderDaily() {
       const day = i + 1;
       const d = dayMap[day];
       const done = !!(d && d.done);
-      const cls = ['day-cell', done ? 'done' : '', day === nextDay ? 'today' : '', day > nextDay ? 'locked' : ''].join(' ');
-      html += `<button class="${cls}" data-day="${day}" data-done="${done ? 1 : 0}">${day}${done ? `<span class="sc">${d.score}分</span>` : ''}</button>`;
+      const full = !!(d && d.full);
+      const cls = ['day-cell', done ? 'done' : '', full ? 'full' : '',
+        day === nextDay ? 'today' : '', day > nextDay ? 'locked' : ''].join(' ');
+      html += `<button class="${cls}" data-day="${day}">${day}${done ? `<span class="sc">${d.score}分</span>` : ''}</button>`;
     }
-    html += `</div></div>`;
+    html += `</div>
+      <p class="tip mt">🟩 已达标　🟨 已满分　点击任意一天可以查看或补做</p></div>`;
 
-    const cur = dayMap[nextDay];
-    const curDone = !!(cur && cur.done);
+    const cur = dayMap[nextDay] || {};
+    const baseDone = !!cur.baseDone, restDone = !!cur.restDone, fullDone = !!cur.full;
     html += `<div class="card center">
-      <h3>${curDone ? '本关已完成' : '今天要挑战'}</h3>
-      <p class="tip">第 ${nextDay} 天 · 50 题 · 满分 100</p>
-      <button class="accent mt" style="padding:12px 30px; font-size:16px;" data-start="${nextDay}" data-done="${curDone ? 1 : 0}">
-        ${curDone ? '查看本关结果' : '开始第 ' + nextDay + ' 天答题'}
-      </button>
-    </div>`;
+      <h3>${fullDone ? '今天已满分完成 🎉' : (baseDone ? '今天打卡已完成 🎉' : '今天要挑战')}</h3>
+      <p class="tip">第 ${nextDay} 天 · 基础关 ${baseSize} 题（约 2 分钟）· 进阶关 ${restSize} 题（选做加分）</p>`;
+    if (!baseDone) {
+      html += `<button class="accent mt" style="padding:12px 30px; font-size:16px;" data-open="${nextDay}" data-seg="base">✅ 开始基础关（${baseSize} 题）</button>`;
+    } else if (!restDone) {
+      html += `<p class="tip mt">基础关已完成，今天可以收工啦；想拿满分就继续挑战 👇</p>
+        <button class="accent mt" style="padding:12px 30px; font-size:16px;" data-open="${nextDay}" data-seg="rest">🚀 挑战进阶关（${restSize} 题）</button>`;
+    } else {
+      html += `<p class="tip mt">今天的 ${fullSize} 题全部完成，明天继续！</p>
+        <button class="secondary mt" style="padding:10px 24px;" data-open="${nextDay}" data-seg="review">📖 查看今天的题</button>`;
+    }
+    html += `</div>`;
     view.innerHTML = html;
 
     view.querySelectorAll('.day-cell').forEach((c) => {
-      c.addEventListener('click', () => openDay(Number(c.dataset.day), Number(c.dataset.done)));
+      c.addEventListener('click', () => openDay(Number(c.dataset.day)));
     });
-    const start = view.querySelector('[data-start]');
-    if (start) start.addEventListener('click', () => openDay(Number(start.dataset.start), Number(start.dataset.done)));
+    view.querySelectorAll('[data-open]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const day = Number(b.dataset.open), seg = b.dataset.seg;
+        if (seg === 'review') openDay(day);
+        else openSeg(day, seg);
+      });
+    });
   } catch (e) { view.innerHTML = `<p class="tip">${esc(e.message)}</p>`; }
 }
 
-async function openDay(day, done) {
+async function openDay(day) {
   try {
     const r = await api('GET', '/api/student/daily/' + day);
-    if (r.done) renderReview(r.questions, { day, back: () => switchView('daily') });
-    else renderQuiz(r.questions, { mode: 'daily', day, back: () => switchView('daily') });
+    if (r.full) {
+      return renderReview(r.questions.filter((q) => q.answered), { day, back: () => switchView('daily') });
+    }
+    if (r.baseDone) return openSeg(day, 'rest', r);   // 基础关已达标 → 接着做进阶关
+    return openSeg(day, 'base', r);
+  } catch (e) { toast(e.message); }
+}
+
+// 打开某一天的某个分段（base=基础关 / rest=进阶关）；该段已答完则只读回顾
+async function openSeg(day, seg, preloaded) {
+  try {
+    const r = preloaded || await api('GET', '/api/student/daily/' + day);
+    if (seg === 'rest' && !r.baseDone) seg = 'base';   // 基础关先行
+    const qs = r.questions.filter((q) => q.seg === seg && !q.answered);
+    if (!qs.length) {
+      return renderReview(r.questions.filter((q) => q.seg === seg && q.answered),
+        { day, seg, back: () => switchView('daily') });
+    }
+    renderQuiz(qs, { mode: 'daily', day, seg, back: () => switchView('daily') });
   } catch (e) { toast(e.message); }
 }
 
 // ---------------- 答题 ----------------
 function renderQuiz(questions, ctx) {
-  state.quiz = { questions, mode: ctx.mode, day: ctx.day };
+  state.quiz = { questions, mode: ctx.mode, day: ctx.day, seg: ctx.seg };
   state.answers = questions.map(() => '');
+
+  const segName = ctx.seg === 'base' ? ' · 基础关' : (ctx.seg === 'rest' ? ' · 进阶关' : '');
+  const title = ctx.mode === 'daily' ? '📅 第 ' + ctx.day + ' 天' + segName : '🎯 分类练习';
+  const tip = ctx.seg === 'base'
+    ? '做完这 ' + questions.length + ' 题并提交，今天的打卡就完成了 🎉'
+    : '做完后点击下方"提交"统一批改';
 
   let html = `<div class="card">
     <div class="row"><button class="sm secondary" data-back>← 返回</button>
-    <h3 class="grow">${ctx.mode === 'daily' ? '📅 第 ' + ctx.day + ' 天答题' : '🎯 分类练习'}</h3>
+    <h3 class="grow">${title}</h3>
     <span class="badge info">${questions.length} 题</span></div>
-    <p class="tip">做完后点击下方"提交"统一批改</p>
+    <p class="tip">${tip}</p>
   </div>`;
 
   questions.forEach((q, i) => {
@@ -186,12 +245,16 @@ function collectAnswers() {
 
 async function submitQuiz() {
   const answers = collectAnswers();
+  const blank = answers.filter((a) => !String(a.answer || '').trim()).length;
+  if (blank && !confirm(`还有 ${blank} 题没有作答，未作答会算错哦。确定现在提交吗？`)) return;
   const btn = view.querySelector('[data-submit]');
   btn.disabled = true; btn.textContent = '批改中…';
   try {
     const isDaily = state.quiz.mode === 'daily';
     const path = isDaily ? `/api/student/daily/${state.quiz.day}/submit` : '/api/student/practice/submit';
-    const body = isDaily ? { answers } : { questions: state.quiz.questions, answers };
+    const body = isDaily
+      ? { answers, seg: state.quiz.seg || 'all' }
+      : { questions: state.quiz.questions, answers };
     const r = await api('POST', path, body);
     renderResult(r, answers);
   } catch (e) { btn.disabled = false; btn.textContent = '✓ 提交批改'; toast(e.message); }
@@ -200,14 +263,29 @@ async function submitQuiz() {
 function renderResult(r, answers) {
   const qs = state.quiz.questions;
   const resultMap = {};
-  r.results.forEach((x) => { resultMap[x.id] = x; });
+  (r.results || []).forEach((x) => { resultMap[x.id] = x; });
+
+  const isDaily = state.quiz.mode === 'daily';
+  const isBase = r.seg === 'base';
+  const headTitle = isBase ? '基础关成绩' : (r.seg === 'rest' ? '进阶关成绩' : '本份成绩');
+  const gotScore = r.segScore != null ? r.segScore : r.score;
+  const gotCorrect = r.segCorrect != null ? r.segCorrect : r.correct;
+  const gotTotal = r.segTotal != null ? r.segTotal : r.total;
 
   let html = `<div class="result-ok mb">
-    <p class="tip">本份成绩</p>
-    <div class="score">${r.score}<span style="font-size:16px;">分</span></div>
-    <p>答对 ${r.correct} / ${r.total} 题${r.allDone ? ' 🎉 恭喜完成全部 50 天打卡！' : ''}</p>
-    <div class="mt"><button data-home class="secondary">← 返回首页</button></div>
-  </div>`;
+    <p class="tip">${headTitle}</p>
+    <div class="score">${gotScore}<span style="font-size:16px;">分</span></div>
+    <p>答对 ${gotCorrect} / ${gotTotal} 题</p>`;
+  if (isDaily) {
+    html += `<p class="tip mt">今日累计：${r.dayCorrect} / ${r.dayTotal} 题 · ${r.dayScore} 分${r.full ? '（已满分 🎉）' : ''}</p>`;
+  }
+  if (isBase) html += `<p class="mt">✅ 今天的打卡已完成，明天再来！</p>`;
+  if (r.allDone) html += `<p class="mt">🎉 恭喜完成全部 50 天打卡！</p>`;
+  html += `<div class="row mt" style="justify-content:center;gap:8px;">`;
+  if (isBase && !r.full) {
+    html += `<button data-next-seg style="padding:10px 24px;">🚀 继续挑战进阶关</button>`;
+  }
+  html += `<button data-home class="secondary">← 返回首页</button></div></div>`;
 
   qs.forEach((q, i) => {
     const g = resultMap[q.id] || {};
@@ -229,13 +307,15 @@ function renderResult(r, answers) {
 
   view.innerHTML = html;
   view.querySelector('[data-home]').addEventListener('click', () => switchView(state.quiz.mode === 'daily' ? 'daily' : 'practice'));
+  const nextSeg = view.querySelector('[data-next-seg]');
+  if (nextSeg) nextSeg.addEventListener('click', () => openSeg(state.quiz.day, 'rest'));
 }
 
 // 查看已完成的答题（只读回顾）
 function renderReview(questions, ctx) {
   let html = `<div class="card"><div class="row">
     <button class="sm secondary" data-back>← 返回</button>
-    <h3 class="grow">📅 第 ${ctx.day} 天 · 回顾</h3>
+    <h3 class="grow">📅 第 ${ctx.day} 天${ctx.seg === 'base' ? ' · 基础关' : (ctx.seg === 'rest' ? ' · 进阶关' : '')} · 回顾</h3>
   </div></div>`;
   questions.forEach((q, i) => {
     const okFlag = q.correct;
