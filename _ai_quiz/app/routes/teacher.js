@@ -13,10 +13,17 @@ const {
 
 const loginTracker = new FailTracker(5, 15 * 60 * 1000);
 
+// 班级写法：2022级1班 / 1班；班级+姓名连写时姓名部分须是 2-4 个汉字（可带 ·）
+const RE_CLASS = /^(?:\d{2,4}级)?\d{1,2}班$/;
+const RE_CLASS_NAME = /^((?:\d{2,4}级)?\d{1,2}班)([一-龥㐀-䶵]{2,4}[A-Za-z·]*)$/;
+
 // 解析学生名单文本：一行一个"班级，姓名"（支持 逗号/顿号 分隔多个姓名）；
+// 也兼容"2022级1班 蓝晟睿"（空格分隔）和"2022级1班蓝晟睿"（连写，自动拆开）；
+// 单独一行只写班级时，看作班级标题，后面几行的姓名都归到这个班；
 // 纯姓名行按空格拆多个名字（兼容旧格式），班级留空
 function parseStudentLines(text) {
   const out = [];
+  let headingClass = ''; // 只写了班级的那一行，作为后续姓名的默认班级
   for (const line of String(text).split(/[\r\n]+/)) {
     const t = line.trim();
     if (!t) continue;
@@ -24,8 +31,25 @@ function parseStudentLines(text) {
     if (parts.length >= 2) {
       const cls = parts[0];
       for (const nm of parts.slice(1)) out.push({ className: cls, name: nm });
-    } else {
-      for (const nm of t.split(/\s+/).map((x) => x.trim()).filter(Boolean)) out.push({ className: '', name: nm });
+      headingClass = '';
+      continue;
+    }
+    const tokens = t.split(/\s+/).map((x) => x.trim()).filter(Boolean);
+    // "2022级1班 蓝晟睿"（第一个词是纯班级，其余是姓名）
+    if (tokens.length >= 2 && RE_CLASS.test(tokens[0])) {
+      for (const nm of tokens.slice(1)) out.push({ className: tokens[0], name: nm });
+      headingClass = '';
+      continue;
+    }
+    // "2022级1班"（整行只有一个班级，当成标题，不建学生）
+    if (tokens.length === 1 && RE_CLASS.test(tokens[0])) {
+      headingClass = tokens[0];
+      continue;
+    }
+    for (const nm of tokens) {
+      const m = RE_CLASS_NAME.exec(nm);
+      if (m) out.push({ className: m[1], name: m[2] });
+      else out.push({ className: headingClass, name: nm });
     }
   }
   return out;

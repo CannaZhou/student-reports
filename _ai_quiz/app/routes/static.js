@@ -35,7 +35,11 @@ function serve(req, res, ctx) {
   if (!EXT.has(ext)) { res.writeHead(403); return res.end('Forbidden'); }
   try {
     const data = fs.readFileSync(full);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      // 不缓存：js/html/css 每次重新校验，避免更新后浏览器仍用旧版本（本系统迭代频繁）
+      'Cache-Control': 'no-cache',
+    });
     res.end(data);
   } catch (e) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

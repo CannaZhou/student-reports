@@ -166,8 +166,8 @@ async function loadStudents() {
   try {
     const r = await api('GET', '/api/teacher/students');
     let html = `<div class="card"><h3>📋 学生名单（${r.list.length} 人）</h3>
-      <p class="tip">格式：<b>班级，姓名</b>，一行一个（可写 <b>2020级5班，李文博</b>，也可只写姓名）；也可上传 Excel（需含"姓名"列，有"班级"列会自动读取）</p>
-      <textarea id="namesInput" rows="3" placeholder="例：2020级5班，李文博&#10;2021级1班，宗子越"></textarea>
+      <p class="tip">格式：<b>班级，姓名</b>，一行一个（逗号/顿号分隔，可写多个姓名）。也支持 <b>2022级1班 蓝晟睿</b>（空格）、<b>2022级1班蓝晟睿</b>（连写，自动拆开）；只写姓名则班级留空；单独一行只写班级，后面几行的姓名都算这个班。<b>学生登录时只填姓名</b>，所以班级和姓名一定要能分开（连写也行，系统按"X班"自动切）。也可上传 Excel（需含"姓名"列，有"班级"列会自动读取）</p>
+      <textarea id="namesInput" rows="3" placeholder="例：2022级1班，蓝晟睿&#10;2025级4班，蓝梓桐"></textarea>
       <div class="row mt"><button id="addBtn">＋ 添加学生</button>
         <label class="grow" style="margin:0; display:flex; align-items:center; gap:8px; cursor:pointer;">
           <button class="secondary" onclick="document.getElementById('xlsxFile').click()">📁 从 Excel 上传</button>

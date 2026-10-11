@@ -1,90 +1,117 @@
-$ErrorActionPreference = 'Continue'
+ï»¿$ErrorActionPreference = 'Continue'
 $CFD   = 'C:\Users\admin\bin\cloudflared.exe'
-$LOGF  = 'F:\cursor20260624\_ai_quiz\tunnel.log'
-$LOGE  = 'F:\cursor20260624\_ai_quiz\tunnel.log.err'
 $APP   = 'F:\cursor20260624\_ai_quiz\app'
-$PAT   = 'https://[a-zA-Z0-9-]+\.trycloudflare\.com'
+$URL   = 'https://ai.aizqxx.top'
+$LOGE  = 'F:\cursor20260624\_ai_quiz\tunnel_recent.err'
 
 Add-Type -AssemblyName System.Windows.Forms
 
-# °²È«¶ÁÈ¡ÈÕÖ¾ÎÄ±¾£º¿ÕÎÄ¼ş/±»Õ¼ÓÃ/²»´æÔÚ Ò»ÂÉ·µ»Ø¿Õ´®£¬¾ø²»·µ»Ø null
-function Get-LogText($f) {
-  $c = Get-Content $f -Raw -ErrorAction SilentlyContinue
-  if ($null -eq $c) { return '' }
-  return [string]$c
+# åˆ¤æ–­å…¬ç½‘åœ°å€æ˜¯å¦å¯ç”¨ï¼ˆåªè¦ 2xx/3xxï¼Œæ’é™¤ 000/502/530 ç­‰ï¼‰
+function Test-Live($u, $timeoutSec = 10) {
+  $code = curl.exe -s -o NUL -w '%{http_code}' --max-time $timeoutSec $u
+  return ($code -match '^[23]')
 }
 
-function Show-Popup($url) {
-  Set-Clipboard $url
-  [System.Windows.Forms.MessageBox]::Show(
-    "¹«ÍøµØÖ·(ÒÑ¸´ÖÆµ½¼ôÌù°å)£º`n`n$url`n`nÇëµ½ ½ÌÊ¦¶Ë-×ÜÀÀ-¹«Íø·ÃÎÊ Õ³Ìù¸ÃµØÖ·£¬ÖØĞÂÉú³É¶şÎ¬Âë",
-    'AI´ğÌâÏµÍ³ Æô¶¯³É¹¦', 'OK', 'Information') | Out-Null
-}
-
-Write-Host '=========================================='
-Write-Host '   AIÖªÊ¶¾ºÈü´ğÌâÏµÍ³  Ò»¼üÆô¶¯'
-Write-Host '=========================================='
-Write-Host ''
-
-if (-not (Test-Path $CFD)) {
-  Write-Host "´íÎó£ºÎ´ÕÒµ½ cloudflared.exe  ->  $CFD"
-  Write-Host 'ÇëÏÈÏÂÔØ cloudflared ·Åµ½ C:\Users\admin\bin\ Ä¿Â¼'
-  Read-Host '°´»Ø³µ¼üÍË³ö'
-  exit 1
-}
-
-# ---- ÈôÒÑÓĞ¿ÉÓÃµØÖ·£¬Ö±½Ó¸ø³ö ----
-if (Test-Path $LOGF) {
-  $old = [regex]::Match((Get-LogText $LOGF) + (Get-LogText $LOGE), $PAT)
-  if ($old.Success -and (Get-Process cloudflared -ErrorAction SilentlyContinue)) {
-    Show-Popup $old.Value
-    Write-Host "ÒÑÓĞ¹«ÍøµØÖ·£º$($old.Value)£¨ÒÑ¸´ÖÆµ½¼ôÌù°å£©"
-    exit 0
+# å­¦æ ¡ DNSï¼ˆ60.191.244.5ï¼‰æ…¢ä¸”ä¸ç¨³å®šï¼Œcloudflared å†…éƒ¨ DNS è¶…æ—¶åˆå¾ˆçŸ­ï¼Œ
+# ç»å¸¸ SRV è®°å½•è¿˜æ²¡æŸ¥å›æ¥å°±è‡ªå·±é€€å‡ºã€‚å…ˆæŠŠéš§é“è¦ç”¨çš„è®°å½•æŸ¥è¿›ç³»ç»Ÿ DNS ç¼“å­˜ï¼Œ
+# å†å¯åŠ¨ cloudflaredï¼ŒæˆåŠŸç‡æ˜æ˜¾æé«˜ã€‚
+function Warm-Dns {
+  foreach ($n in @('_v2-origintunneld._tcp.argotunnel.com', '_origintunneld._tcp.argotunnel.com')) {
+    try { Resolve-DnsName -Name $n -Type SRV -DnsOnly -ErrorAction Stop | Out-Null } catch {}
+  }
+  foreach ($n in @('region1.v2.argotunnel.com', 'region2.v2.argotunnel.com')) {
+    try { Resolve-DnsName -Name $n -DnsOnly -ErrorAction Stop | Out-Null } catch {}
   }
 }
-Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue
 
-# ---- Æô¶¯´ğÌâ·şÎñ ----
-if (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue) {
-  Write-Host '´ğÌâ·şÎñÒÑÔËĞĞ£¨¶Ë¿Ú8080£©£¬ÎŞĞèÖØ¸´Æô¶¯'
-} else {
-  Write-Host 'ÕıÔÚÆô¶¯´ğÌâ·şÎñ£¨¶Ë¿Ú8080£©...'
-  Start-Process node -ArgumentList 'server.js' -WorkingDirectory $APP -WindowStyle Minimized
-  Start-Sleep -Seconds 3
-}
-
-# ---- ËíµÀ×Ô¶¯ÖØÊÔ ----
-Write-Host ''
-Write-Host 'ÕıÔÚ³¢ÊÔ»ñÈ¡¹«ÍøµØÖ·£¬ÇëÉÔºò...'
-Write-Host 'ÈôÑ§Ğ£ÍøÂçÎ´»Ö¸´£¬½Å±¾»áÃ¿30Ãë×Ô¶¯ÖØÊÔ£¬Çë±£³Ö´Ë´°¿Ú¿ªÆô'
-Write-Host ''
-
-$try = 0
-while ($true) {
-  $try++
-  Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue
-  Start-Sleep -Seconds 1
-  Remove-Item $LOGF, $LOGE -Force -ErrorAction SilentlyContinue
-
-  Start-Process -FilePath $CFD -ArgumentList @('tunnel','--protocol','http2','--url','http://localhost:8080') `
-    -RedirectStandardOutput $LOGF -RedirectStandardError $LOGE -WindowStyle Minimized -ErrorAction SilentlyContinue
-
-  $url = $null
-  for ($i = 0; $i -lt 14 -and -not $url; $i++) {
-    Start-Sleep -Seconds 3
-    $m = [regex]::Match((Get-LogText $LOGF) + (Get-LogText $LOGE), $PAT)
-    if ($m.Success) { $url = $m.Value }
-  }
-
-  if ($url) {
+# å¯åŠ¨éš§é“å¹¶ç­‰å®ƒç”Ÿæ•ˆï¼›ä¸€è½®æ²¡èµ·æ¥å°±æ€æ‰é‡æ¥ï¼ˆDNS æŠ–åŠ¨æ—¶é‡è¯•æ¯”æ­»ç­‰æœ‰æ•ˆï¼‰
+function Start-Tunnel {
+  param([int]$Attempts = 3, [int]$WaitPerTry = 8)   # æ¯è½® 8 x 5 = 40 ç§’
+  for ($a = 1; $a -le $Attempts; $a++) {
+    Write-Host ('      ç¬¬ ' + $a + '/' + $Attempts + ' æ¬¡å°è¯•è¿æ¥éš§é“...')
+    Warm-Dns
+    $p = Start-Process -FilePath $CFD -ArgumentList @('tunnel','run','aizqxx') `
+         -WorkingDirectory 'C:\Users\admin' -WindowStyle Minimized -PassThru `
+         -RedirectStandardError $LOGE -ErrorAction SilentlyContinue
+    for ($i = 0; $i -lt $WaitPerTry; $i++) {
+      Start-Sleep -Seconds 5
+      if (Test-Live $URL) { return $true }
+      Write-Host -NoNewline '.'
+    }
     Write-Host ''
-    Write-Host '=========================================='
-    Write-Host "  ¹«ÍøµØÖ·£º$url"
-    Write-Host '  £¨ÒÑ×Ô¶¯¸´ÖÆµ½¼ôÌù°å£©'
-    Write-Host '=========================================='
-    Show-Popup $url
-    exit 0
+    Write-Host '      æœ¬è½®æ²¡è¿ä¸Šï¼Œå…³æ‰é‡æ¥ä¸€æ¬¡ã€‚'
+    if ($p) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 2
   }
-  Write-Host "  µÚ $try ´Î³¢ÊÔÎ´Á¬ÉÏ£¬Ñ§Ğ£ÍøÂç¿ÉÄÜÎ´»Ö¸´£¬30Ãëºó×Ô¶¯ÖØÊÔ..."
-  Start-Sleep -Seconds 30
+  return $false
+}
+
+Write-Host '=========================================='
+Write-Host '  AIçŸ¥è¯†å­¦ä¹ ç³»ç»Ÿ  ä¸€é”®å¯åŠ¨ (node + å…¬ç½‘éš§é“)'
+Write-Host '=========================================='
+
+# ---------- 1) nodeï¼ˆç«¯å£ 8080ï¼‰ ----------
+$nodeOk = $false
+if (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue) {
+  $nodeOk = $true
+  Write-Host '[1/3] node å·²åœ¨è¿è¡Œï¼ˆç«¯å£ 8080ï¼‰'
+} else {
+  Write-Host '[1/3] æ­£åœ¨å¯åŠ¨ node ...'
+  Start-Process node -ArgumentList 'server.js' -WorkingDirectory $APP -WindowStyle Minimized
+  for ($i = 0; $i -lt 15; $i++) {            # æœ€é•¿çº¦ 30 ç§’
+    Start-Sleep -Seconds 2
+    if (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue) { $nodeOk = $true; break }
+  }
+  if ($nodeOk) { Write-Host '      node å·²èµ·æ¥' }
+  else { Write-Host '      [è­¦å‘Š] 30 ç§’å†… node æœªç›‘å¬ 8080ï¼Œè¯·æŸ¥çœ‹æ—¥å¿—æˆ–é‡è¯•' }
+}
+
+# ---------- 2) cloudflared å…¬ç½‘éš§é“ ----------
+if (Test-Live $URL) {
+  Write-Host '[2/3] å…¬ç½‘éš§é“æ­£åœ¨æœåŠ¡'
+} else {
+  Write-Host '[2/3] å…¬ç½‘æš‚ä¸å¯è¾¾ï¼Œæ­£åœ¨å¯åŠ¨éš§é“ï¼ˆæœ€é•¿çº¦ 2 åˆ†é’Ÿï¼‰...'
+  $cf = Get-Process cloudflared -ErrorAction SilentlyContinue | Select-Object -First 1
+  $tunnelOk = $false
+  if ($null -ne $cf) {
+    Write-Host '      å·²æ£€æµ‹åˆ° cloudflared è¿›ç¨‹ï¼Œå…ˆç­‰å®ƒæ³¨å†Œï¼ˆæœ€å¤š 30 ç§’ï¼‰...'
+    for ($i = 0; $i -lt 6; $i++) {
+      Start-Sleep -Seconds 5
+      if (Test-Live $URL) { $tunnelOk = $true; break }
+      Write-Host -NoNewline '.'
+    }
+    Write-Host ''
+    if (-not $tunnelOk) {
+      Write-Host '      è¿™ä¸ªè¿›ç¨‹è¿ä¸ä¸Šï¼Œå…³æ‰é‡æ–°å¯åŠ¨ã€‚'
+      Stop-Process -Id $cf.Id -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Seconds 2
+    }
+  }
+  if (-not $tunnelOk) { $tunnelOk = Start-Tunnel }
+
+  if (-not $tunnelOk) {
+    Write-Host ''
+    Write-Host '[å¤±è´¥] 2 åˆ†é’Ÿå†…å…¬ç½‘ä»æœªæ¢å¤ï¼Œè¯·æ£€æŸ¥ï¼š'
+    Write-Host '  1. æœ¬æœºèƒ½å¦ä¸Šç½‘ / DNS æ˜¯å¦æ­£å¸¸ï¼ˆå­¦æ ¡ DNS 60.191.244.5ï¼‰'
+    Write-Host '  2. cloudflared æ˜¯å¦è¢«æ€è½¯æˆ–é˜²ç«å¢™æ‹¦æˆª'
+    Write-Host '  3. æ‰‹åŠ¨æ’æŸ¥ï¼šcloudflared tunnel run aizqxx'
+    Write-Host ('     æ—¥å¿—ï¼š' + $LOGE)
+    Write-Host ''
+    Read-Host 'æŒ‰å›è½¦é€€å‡º'
+    exit 1
+  }
+}
+
+# ---------- 3) ç»“æœç¡®è®¤ ----------
+if (Test-Live $URL) {
+  Write-Host ''
+  Write-Host '=========================================='
+  Write-Host ('  è®¿é—®åœ°å€:  ' + $URL)
+  Write-Host '  å·²å¤åˆ¶åˆ°å‰ªè´´æ¿ï¼Œå‘ç»™å­¦ç”Ÿå³å¯å¼€å§‹'
+  Write-Host '=========================================='
+  Set-Clipboard $URL
+  [System.Windows.Forms.MessageBox]::Show("è®¿é—®åœ°å€å·²å¤åˆ¶åˆ°å‰ªè´´æ¿ï¼š`n`n$URL`n`n å‘ç»™å­¦ç”Ÿå³å¯ä½¿ç”¨", 'AIçŸ¥è¯†å­¦ä¹ ç³»ç»Ÿ - å¯åŠ¨æˆåŠŸ', 'OK', 'Information') | Out-Null
+} else {
+  Write-Host '[è­¦å‘Š] å…¬ç½‘æ£€æŸ¥ä»æœªé€šè¿‡ï¼Œè¯·æŒ‰ä¸Šæ–¹æç¤ºæ’æŸ¥åé‡è¯•ã€‚'
+  Read-Host 'æŒ‰å›è½¦é€€å‡º'
 }

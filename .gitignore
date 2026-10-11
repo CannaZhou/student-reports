@@ -17,3 +17,13 @@ _lessonquiz/tunnel*.err
 
 # 课堂检测系统：验收用的临时实例副本与截图（tools/_tmp）
 _lessonquiz/tools/_tmp/
+
+# 凭据与隧道授权证书：绝不能入库
+cert.pem
+
+# 本地备份包（git bundle 与目录副本）：只留本机，不入库
+_backup_bundles/
+
+# 大体积临时产物（视频素材等）
+_tmp_vid/
+_tmp_*/

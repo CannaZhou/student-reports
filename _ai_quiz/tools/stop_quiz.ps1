@@ -13,10 +13,10 @@ if ($cf) {
 # 停止答题服务（占用8080的进程）
 $conn = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue
 if ($conn) {
-  $pids = $conn | Select-Object -ExpandProperty OwningProcess -Unique
-  foreach ($pid in $pids) {
-    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-    Write-Host "[OK] 已停止 答题服务(端口8080, PID $pid)"
+  $procIds = $conn | Select-Object -ExpandProperty OwningProcess -Unique
+  foreach ($procId in $procIds) {
+    Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+    Write-Host "[OK] 已停止 答题服务(端口8080, PID $procId)"
   }
 } else {
   Write-Host '[--] 未检测到运行中的答题服务(8080)'

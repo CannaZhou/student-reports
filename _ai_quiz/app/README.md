@@ -87,30 +87,38 @@ app/data/
 2. 学生浏览器打开 `http://192.168.1.100:8080`
 3. 若访问不通：Windows 防火墙放行端口 8080（"允许应用通过防火墙"→ 添加入站规则，允许 TCP 8080）
 
-## 六、公网部署（可选，供假期远程答题）
+## 六、公网部署（学生在家也能访问）
 
-> 仅在确实需要"学生在家也能访问"时使用。完成后内网访问照常可用。
-
-### 方式一：免费隧道（零成本，推荐先试）
-
+> 当前采用 **cloudflared 固定命名隧道 + 自有域名**，公网地址固定为 **https://ai.aizqxx.top**，重启不变。教师端「📊 总览」→"公网访问"面板已默认填好该地址，点"生成二维码"发给班级群即可。
+>
 > 适合"学生（家长）用手机相机扫码 / 复制到浏览器打开"。**注意：不要让学生在微信里直接点链接**，微信会拦截未备案的境外域名，要用相机扫码或复制到 Chrome/Safari。
 
-1. 下载 cloudflared（Windows）：`winget install Cloudflare.cloudflared`
-   - 若 winget 失败，用镜像下载到任意目录：
-     `curl -L -o cloudflared.exe "https://gh-proxy.com/https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"`
-2. **保持答题服务器运行**（`node server.js`），再开一个命令行启动隧道：
+### 固定隧道（当前在用，地址不变）
+
+1. 下载 cloudflared（Windows）：`winget install Cloudflare.cloudflared`（失败用镜像：`curl -L -o cloudflared.exe "https://gh-proxy.com/https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"`）
+2. 登录授权（首次）：`cloudflared tunnel login` → 浏览器授权，证书写到 `C:\Users\admin\.cloudflared\cert.pem`
+3. 建隧道并绑定域名（域名先在 Cloudflare DNS 解析到该账号）：
    ```
-   cloudflared tunnel --url http://localhost:8080
+   cloudflared tunnel create aizqxx
+   cloudflared tunnel route dns aizqxx ai.aizqxx.top
    ```
-3. 等几秒，终端会打印一个 `https://xxxx.trycloudflare.com` 地址 → 这就是公网链接
-4. 打开教师端 →「📊 总览」顶部"公网访问"面板 → 粘贴该地址 → 点"生成二维码"
-5. 把二维码发到班级群，学生用**手机相机扫码**进入；或让学生把链接复制到浏览器打开
+   配置 `C:\Users\admin\.cloudflared\config.yml`：
+   ```yaml
+   tunnel: <隧道ID>
+   credentials-file: C:/Users/admin/.cloudflared/<隧道ID>.json
+   ingress:
+     - hostname: ai.aizqxx.top
+       service: http://localhost:8080
+     - service: http_status:404
+   ```
+4. **保持答题服务器运行**（`node server.js`），启动隧道：`cloudflared tunnel run aizqxx`
+5. 验证：浏览器打开 `https://ai.aizqxx.top` 能访问即成功；教师端"公网访问"面板生成二维码发班级群
+
+一键启停：双击 `启动答题系统.bat` 会自动检测并拉起 node + 固定隧道并弹窗给出地址（详见 `tools/start_quiz.ps1`）。
 
 ⚠️ 注意：
-- 免费隧道地址**每次重启都会变** → 重启后要在教师端重新粘贴、重新生成二维码
-- **教师电脑不能关机/断网**，否则链接失效
-- 隧道传输内容不走我们控制，仅供教学使用，用完可 Ctrl+C 关闭
-- 若扫码慢/连不上（运营商限制 UDP），改用 TCP 模式：`cloudflared tunnel --protocol http2 --url http://localhost:8080`
+- **教师电脑需保持开机、隧道常驻**，关机/断网则链接失效；重启电脑后重新点一键启动即可
+- 若扫码慢/连不上（运营商限制 UDP），可给 cloudflared 加 `--protocol http2`
 
 ### 方式二：云服务器（学生必须微信里直接点开才需要）
 
