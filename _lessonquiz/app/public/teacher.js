@@ -575,7 +575,11 @@
         if (v === '' && s.score == null) { saving = false; return; }
         try {
           const r = await api('/api/teacher/sheet-board/' + encodeURIComponent(id) + '/score', 'POST', { uid: s.uid, score: doClear ? '' : Number(v) });
-          applyScore(r.score, r.scoredAt, r.termScore);
+          // ⚠️ 第 4 个参数一定要带上：直接填总分 / 清除，服务端会把 p.marks[lid].tasks 一起作废
+          // （/score 恒回 tasks:null）。漏传的话 applyScore 走「本次响应不带逐题信息，别动现有的勾」那条路，
+          // 那一排 ✓/✗ 就留在新的总分底下 —— 老师再点任意一题，客户端拿这份陈旧的勾拼整张表写回去，
+          // 刚清掉的分又跳回来，老师看到的就是「赋分不对、还撤不掉」。（2026-10-14 老师报的）
+          applyScore(r.score, r.scoredAt, r.termScore, r.tasks);
           toast(r.score == null ? '已清除 ' + s.name + ' 的评分' : '已给 ' + s.name + ' 记 ' + r.score + ' 分');
         } catch (e) {
           inp.value = (s.score != null) ? String(s.score) : '';

@@ -190,7 +190,12 @@ const SHEET_ROW = (id) => (hasSheet(id) ? [{ _i: 0, lab: '烟雾自检', c1: '1'
   console.log('\n-- 10. 证书墙与课程地图');
   r = await jfetch('/api/student/certs', 'GET', null, S[A]);
   const wall = r.j.items;
-  eq(wall.length, 4, '证书墙列出本年级全部 4 课');
+  // 从 content.json 数这一年级有几课，不写死 —— 六上加了第5课之后这里一度还在要 4 课，
+  // 每加一课就要手改一次，索性按课表算。
+  const G1 = (CONTENT.grades || []).filter(
+    (g) => (g.units || []).some((u) => (u.lessons || []).some((l) => l.id === L1)))[0];
+  const nWall = G1.units.reduce((s, u) => s + u.lessons.length, 0);
+  eq(wall.length, nWall, '证书墙列出本年级全部 ' + nWall + ' 课（跟 content.json 数）');
   const w1 = wall.filter((x) => x.lessonId === L1)[0];
   ok(w1 && w1.issued && w1.title.indexOf('第3课') === 0, '墙上课卡带课名与已发证状态');
   ok(wall.some((x) => x.unitTitle), '带单元名（分组用）');

@@ -182,6 +182,13 @@ function mk(ws) {
     var r=[].filter.call(document.querySelectorAll('.tbl tr'),function(x){return x.textContent.indexOf(${JSON.stringify(n)})>=0 && x.querySelector('input.score-in');})[0];
     if(!r || !r.querySelectorAll('.sys-task')[${i}]) return 0;
     r.querySelectorAll('.sys-task')[${i}].click(); return 1;})()`;
+  // 直接改左边那个总分框（清空＝点「清除」，填数＝老师自己报分）。走的是 input 的 change 事件，
+  // 和老师手打/点清除同一条路（清除按钮上有个 confirm，无头浏览器里不好按，就直接改输入框）。
+  const setScore = (n, v) => `(function(){
+    var r=[].filter.call(document.querySelectorAll('.tbl tr'),function(x){return x.textContent.indexOf(${JSON.stringify(n)})>=0 && x.querySelector('input.score-in');})[0];
+    if(!r) return 0;
+    var i=r.querySelector('input.score-in'); i.value=${JSON.stringify(v)};
+    i.dispatchEvent(new Event('change')); return 1;})()`;
 
   await send('Page.navigate', { url: BASE + '/teacher' });
   await sleep(1300);
@@ -245,6 +252,39 @@ function mk(ws) {
     .find((x) => x.uid === B + '｜' + CLA) || {};
   ok(srvB.taskMarks && srvB.taskMarks['2'] === false && Object.keys(srvB.taskMarks).length === 3,
     '一键采纳落盘的是逐题判定而不是一个光秃秃的总分：' + JSON.stringify(srvB.taskMarks));
+
+  console.log('\n-- 4b. 清空总分 / 直接填总分 → 那一排勾必须一起清掉（否则再点一题旧勾会复活）');
+  // 老师报的就是这一条：「任务赋分不对，无法撤销」。甲此刻是 任务①❌ 任务②✅ 任务③❌ = 1 分。
+  // 老师把总分框清空（＝点「清除」）→ 服务端会把逐题标记一起作废（/score 恒回 tasks:null），
+  // 前端也必须把那一排勾清回「系统预选」；否则勾还挂在新的总分底下，老师再点任意一题，
+  // 客户端会拿这份陈旧的勾拼整张表写回服务端 —— 分数又跳回 1 分，看着就是「撤不掉」。
+  const aNow = (await rowNow(A)) || {};
+  ok(aNow.score === '1', '（前置）甲现在是 1 分、带着逐题勾：' + (aNow.btns || []).map((b) => b.t).join(' '));
+  await ev(setScore(A, ''));
+  // ⚠️ 不能只等 score==='' —— 输入框是我自己当场清空的，那一瞬间就成立了，会读到**上一版**的勾。
+  // 要等一个只有「服务端回来了」才会变的信号：状态标签回到「未赋分」。
+  const aClr = (await waitRow(A, (r) => r.score === '' && r.pill === '未赋分')) || {};
+  ok(aClr.score === '' && aClr.pill === '未赋分', '清空总分框 → 这一行退回「未赋分」（' + aClr.pill + '）');
+  ok((aClr.btns || []).length === 3 && (aClr.btns || []).every((b) => b.c.indexOf('st-teacher') < 0),
+    '那一排勾同时清掉、退回系统预选，没留下老师判的实框：' + (aClr.btns || []).map((b) => b.t).join(' '));
+  const srvClr = ((await jfetch('/api/teacher/sheet-board/6-1-4?class=' + encodeURIComponent(CLA), 'GET', null, T)).j.students || [])
+    .find((x) => x.uid === A + '｜' + CLA) || {};
+  ok(srvClr.score == null && !srvClr.taskMarks, '服务端也确认评分为空（score=null、无逐题标记）');
+  // 直接往总分框里填个 3（＝老师自己报分）：服务端照样把逐题标记作废，勾要退回系统预选。
+  // 这一等是有意义的 —— 行刚从「未赋分」变回「已赋分」，只有服务端回来了才会变。
+  await ev(setScore(A, '3'));
+  const aSet = (await waitRow(A, (r) => r.score === '3' && r.pill === '已赋分')) || {};
+  ok((aSet.btns || []).every((b) => b.c.indexOf('st-teacher') < 0),
+    '老师直接报个总分 3 → 那一排勾同样退回系统预选：' + (aSet.btns || []).map((b) => b.t).join(' '));
+  // 再点任务①：必须从「系统判定」重来（①✗ ②✓ ③✓ = 2 分），而不是把清掉前的 ❌✅❌ 复活成 1 分
+  await ev(clickSysTask(A, 0));
+  const aAfter = (await waitRow(A, (r) => /任务①❌/.test(((r.btns || [])[0] || {}).t || ''))) || {};
+  ok(aAfter.score === '2', '清掉之后再点第一题 → 2 分（从系统判定重来，不是把旧的 ❌✅❌ 复活成 1）');
+  // 复原成第 3 节末尾的状态（①✗ ②✓ ③✗ = 1 分），后面第 7 节学生端面板断言的就是这个状态
+  await ev(clickSysTask(A, 2));
+  const aBack = (await waitRow(A, (r) => r.score === '1' && /任务③❌/.test(((r.btns || [])[2] || {}).t || ''))) || {};
+  ok(aBack.score === '1' && /任务①❌/.test(((aBack.btns || [])[0] || {}).t || ''),
+    '（复原）再点第三题 → 回到 1 分：' + (aBack.btns || []).map((b) => b.t).join(' '));
 
   console.log('\n-- 5. 窄屏（500px）：按钮条不撑破版式');
   const ovr = await ev("({sw:document.documentElement.scrollWidth, iw:window.innerWidth})");
