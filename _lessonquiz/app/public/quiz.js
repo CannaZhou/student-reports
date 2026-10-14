@@ -744,7 +744,16 @@
           shuffle(words).forEach((w) => {
             const o = el('option'); o.value = w; o.textContent = w; sel.appendChild(o);
           });
-          sel.value = prev[c.key] || '';
+          // 下拉格也可以是「题目印好的」（preset）——如第5课运行记录表第一行（35/94）的运行结果
+          //   已经给出，学生不用再选。选中它、置灰、打 data-pre（收卷时同样不算「学生填的」）；
+          //   万一这个值不在候选词里，补一个选项出来，别让下拉停在“请选…”。
+          const preSel = (b.preset && b.preset[i] && b.preset[i][c.key] != null) ? String(b.preset[i][c.key]) : '';
+          if (preSel) {
+            if (words.indexOf(preSel) < 0) { const o = el('option'); o.value = preSel; o.textContent = preSel; sel.appendChild(o); }
+            sel.dataset.pre = '1';
+            td.classList.add('sheet-pre');
+          }
+          sel.value = prev[c.key] || preSel || '';
           td.appendChild(sel);
         } else {
           const inp = el('input', 'input sheet-cell');

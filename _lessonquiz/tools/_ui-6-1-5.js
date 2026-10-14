@@ -41,6 +41,14 @@ const WHY_IND = '少了缩进：这一行要缩进到循环体里面';
 const RES_A = '23只鸡，12只兔';
 const RES_B = '15只鸡，5只兔';
 const RES_NONE = '屏幕上什么也没有输出（无解）';
+const IDEA_PICK = [
+  '把 35、94、36 改成变量，写在程序最前面',
+  '用 input() 让用户自己输入头数和脚数',
+  '先加一句提示，告诉用户答案大概在什么范围',
+  '把程序复制成几份，一份算一道题',
+];
+const T3_ANSWER = '头数、脚数、循环范围都写在程序里，换题目要改好几个地方';
+const T3_WRONG = '算不出答案的时候，程序会一直循环下去、停不下来';
 
 (async () => {
   console.log('== 六上第5课《算法的执行》 学生端界面自检 ==');
@@ -100,7 +108,7 @@ const RES_NONE = '屏幕上什么也没有输出（无解）';
   await waitFor(`document.readyState==='complete' && !!document.getElementById('loginGo')`, 40, 300);
   await openLesson(A, '课内任务单');
   const up = await waitFor(`!document.getElementById('view-sheet').hidden && document.querySelectorAll('tr[data-rowi]').length===12`, 40, 300);
-  ok(up, '任务单打开、12 个可填行都在（任务一 3 + 运行记录 3 + jie 3 + 改进意见 1 + 练习 2）');
+  ok(up, '任务单打开、12 个可填行都在（任务一 3 + 运行记录 3 + jie 3 + 改进意见 1 + 任务三 选择/填空 2）');
 
   console.log('\n-- 2. 任务一：三个程序的代码块真的把 bug 印出来了');
   const codes = await ev(`[].slice.call(document.querySelectorAll('#sheetBody pre.sheet-code')).map(function(p){return p.textContent;})`);
@@ -128,13 +136,22 @@ const RES_NONE = '屏幕上什么也没有输出（无解）';
 
   console.log('\n-- 4. 任务二：运行记录表 + jie 填空');
   const run = await ev(`(function(){var trs=[3,4,5].map(function(i){return document.querySelector('tr[data-rowi="'+i+'"]');});
-    return trs.map(function(tr){return {tou:tr.querySelector('[data-col="tou"]').value, jiao:tr.querySelector('[data-col="jiao"]').value,
+    return trs.map(function(tr){var r=tr.querySelector('[data-col="res"]');
+      return {tou:tr.querySelector('[data-col="tou"]').value, jiao:tr.querySelector('[data-col="jiao"]').value,
       pre:[].slice.call(tr.querySelectorAll('.sheet-pre')).length,
-      sel:tr.querySelector('[data-col="res"]').tagName, opts:tr.querySelector('[data-col="res"]').options.length};});})()`);
+      sel:r.tagName, opts:r.options.length, val:r.value, isPre:!!r.dataset.pre,
+      empty:[].slice.call(tr.querySelectorAll('select, input')).filter(function(x){return x.dataset.col && !String(x.value).trim();}).map(function(x){return x.dataset.col;}),
+      other:[].slice.call(tr.querySelectorAll('select, input')).filter(function(x){return x.dataset.col && String(x.value).trim() && !x.dataset.pre;}).map(function(x){return x.dataset.col;})};});})()`);
   ok(run.length === 3 && run[0].tou === '35' && run[0].jiao === '94' && run[1].tou === '20' && run[2].tou === '60' && run[2].jiao === '66',
     '三组数据都是题目印好的（35/94、20/50、60/66）');
-  ok(run[0].pre === 2, '头数、脚数那两格是灰底 preset（学生不用抄）');
+  ok(run[0].pre === 3, '第一行（35/94）三格全是灰底 preset，学生一格都不用填：' + run[0].pre + ' 格');
   ok(run[0].sel === 'SELECT' && run[0].opts === 5, '运行结果写成下拉：4 条候选 + 1 个“请选…”');
+  ok(run[0].val === RES_A && run[0].isPre,
+    '老师要求：第一行（35/94）的运行结果直接印出来（' + run[0].val + '）——“不需要选”');
+  ok(run[0].other.length === 0, '第一行没有任何一格需要学生填');
+  ok(run[1].empty.join(',') === 'res' && run[2].empty.join(',') === 'res',
+    '另外两行的运行结果才是空着等学生选（' + run[1].empty.join(',') + ' / ' + run[2].empty.join(',') + '）');
+  ok(run[1].opts === 5 && run[2].opts === 5, '这两行的下拉也是 4 条候选 + 1 个“请选…”');
   const jie = await ev(`(function(){var trs=[6,7,8].map(function(i){return document.querySelector('tr[data-rowi="'+i+'"]');});
     return {labels:trs.map(function(t){return t.querySelector('td').textContent;}),
             sels:trs.map(function(t){var s=t.querySelector('select');return {tag:s.tagName, opts:s.options.length};}),
@@ -144,23 +161,34 @@ const RES_NONE = '屏幕上什么也没有输出（无解）';
     '三行的问题分别写在第一列：' + jie.labels.join(' / '));
   ok(jie.code.indexOf('jie = \u2460') >= 0 || jie.code.indexOf('jie = ①') >= 0, '代码块里用 ①②③ 标出了要补的位置');
   ok(jie.code.indexOf('print("此题无解")') >= 0, '完善后的程序里带着“此题无解”那一句');
+  // 老师 2026-10-14：把这张流程图也放进去，给学生作参考
+  const fig = await ev(`(function(){var im=document.querySelector('#sheetBody .sheet-figure img');
+    return im?{src:im.getAttribute('src'), w:im.naturalWidth, h:im.naturalHeight,
+      cap:(im.parentNode.querySelector('.sheet-figure-cap')||{}).textContent||'', iw:im.getBoundingClientRect().width}:null;})()`);
+  ok(fig && fig.w > 0, '任务二（2）的流程图真的加载出来了（' + (fig && fig.w) + '×' + (fig && fig.h) + '）');
+  ok(fig && fig.src === '/img/g6l5-jie-flow.png', '图就是老师给的那张流程图：' + (fig && fig.src));
+  ok(fig && fig.cap.length > 0, '图下面有说明文字：' + (fig && fig.cap));
+  ok(fig && fig.iw <= 480, '流程图收在 500px 视口里（' + (fig && Math.round(fig.iw)) + 'px）');
 
   console.log('\n-- 5. 全填对 → 保存 → 系统判分');
   const setSel = async (i, col, v) => ev(`(function(){var f=document.querySelector('tr[data-rowi="${i}"] [data-col="${col}"]');f.value=${JSON.stringify(v)};return 1;})()`);
   await setSel(0, 'msg', ERR_NAME); await setSel(0, 'why', WHY_NAME);
   await setSel(1, 'msg', ERR_SYN); await setSel(1, 'why', WHY_SYN);
   await setSel(2, 'msg', ERR_IND); await setSel(2, 'why', WHY_IND);
-  await setSel(3, 'res', RES_A); await setSel(4, 'res', RES_B); await setSel(5, 'res', RES_NONE);
+  // 第 3 行（35/94）三格是题目印好的，学生一格都不用填 —— 故意不去动它
+  await setSel(4, 'res', RES_B); await setSel(5, 'res', RES_NONE);
   await setSel(6, 'val', '0'); await setSel(7, 'val', '1'); await setSel(8, 'val', '0');
-  await ev(`document.querySelector('tr[data-rowi="9"] [data-col="idea"]').value='把 35、94、36 都改成变量放在程序最前面，或者用 input() 让用户自己输入。'`);
-  await ev(`document.querySelector('tr[data-rowi="10"] [data-col="problem"]').value='头数和脚数配得不合理时它只说“此题无解”。'`);
-  await ev(`document.querySelector('tr[data-rowi="11"] [data-col="idea"]').value='除了“无解”，还可以提示“头数脚数不可能配出鸡兔”。'`);
+  await setSel(9, 'idea', IDEA_PICK[1]);
+  await setSel(10, 'ans', T3_ANSWER);
+  await ev(`document.querySelector('tr[data-rowi="11"] [data-col="idea"]').value='让用户自己输入头数和脚数，再判断这两个数能不能配出鸡兔。'`);
   const filled = await ev(`[].slice.call(document.querySelectorAll('tr[data-rowi]')).map(function(tr){
-    var fs=[].slice.call(tr.querySelectorAll('select,input')).filter(function(x){return x.dataset.col;});
-    return {i:tr.dataset.rowi, blank:fs.filter(function(x){return String(x.value).trim()==='';}).map(function(x){return x.dataset.col;})};})`);
-  const nFilled = filled.filter((r) => r.blank.length < 2).length; // 练习那两行是「问题+创想」，填一格这一行就算填过
-  if (nFilled !== 12) console.log('    空着的行：' + JSON.stringify(filled.filter((r) => r.blank.length >= 2)));
-  ok(nFilled === 12, '12 行都真的填上了（少一行就是某一处静默没填上：' + nFilled + '/12）');
+    var fs=[].slice.call(tr.querySelectorAll('select,input')).filter(function(x){return x.dataset.col && !x.dataset.pre;});
+    return {i:tr.dataset.rowi, n:fs.length, blank:fs.filter(function(x){return String(x.value).trim()==='';}).map(function(x){return x.dataset.col;})};})`);
+  const fillable = filled.filter((r) => r.n > 0);
+  const nFilled = fillable.filter((r) => r.blank.length === 0).length;
+  if (nFilled !== fillable.length) console.log('    空着的行：' + JSON.stringify(fillable.filter((r) => r.blank.length)));
+  ok(fillable.length === 11, '11 行有格子要学生填（第 3 行 35/94 整行是题目印好的）');
+  ok(nFilled === 11, '这 11 行都真的填上了（少一行就是某一处静默没填上：' + nFilled + '/' + fillable.length + '）');
   await ev(`document.getElementById('sheetSaveBtn').click()`);
   const saved = await waitFor(`document.querySelectorAll('#sheetAuto .auto-item').length===3`, 40, 300);
   ok(saved, '保存后「系统判分」面板列出 3 个任务');
@@ -170,7 +198,10 @@ const RES_NONE = '屏幕上什么也没有输出（无解）';
   ok(auto[0] && auto[0].mark === '✅' && auto[0].note.indexOf('做对了') >= 0, '任务一 判对：' + (auto[0] || {}).name + ' → ' + (auto[0] || {}).note);
   ok(auto[1] && auto[1].mark === '✅', '任务二 判对：' + (auto[1] || {}).note);
   ok(auto[1] && auto[1].note.indexOf('还有 1 处老师看') >= 0, '任务二 标出还有 1 处（改进意见）要老师看');
-  ok(auto[2] && auto[2].mark === '➖' && auto[2].note === '这一任务由老师批阅', '任务三 开放题 → 明说“由老师批阅”，不假装判过');
+  ok(auto[2] && auto[2].mark === '✅', '任务三 判对（老师 2026-10-14：选择题学生完成就算分）、' + (auto[2] || {}).note);
+  ok(auto[2] && auto[2].note.indexOf('还有 1 处老师看') >= 0, '任务三 也标出还有 1 处（新创想那格）要老师看');
+  ok(await ev(`document.querySelectorAll('#sheetAuto .auto-item')[2].textContent.indexOf('由老师批阅')<0`),
+    '任务三 不再显示“这一任务由老师批阅”（能判了）');
   ok(await ev(`document.querySelectorAll('#sheetBody .sheet-wrong, #sheetBody .bad').length===0`), '全对时没有一格被打红框');
   await shot(`document.getElementById('sheetAuto')`, '02-系统判分面板.png');
 
@@ -183,6 +214,19 @@ const RES_NONE = '屏幕上什么也没有输出（无解）';
   ok(back && auto2.mark === '❌', '程序二的「错在哪里」改错 → 任务一 变 ❌（' + auto2.note + '）');
   ok(auto2.note.indexOf('有 1 处不对') >= 0, '说清只有 1 处不对，不牵连别的任务');
   ok(auto2.red >= 1, '那一格在学生端被打上红框（' + auto2.red + ' 格）');
+  ok(await ev(`document.querySelectorAll('#sheetAuto .auto-item')[1].className.indexOf('auto-ok')>=0`), '任务二 不受影响，仍然是 ✅');
+
+  console.log('\n-- 6b. 任务三那道选择题选错 → 只任务三翻 ❌');
+  // 先把任务一改回来，只留任务三错 —— 这样教师端看到的系统分能一路对得上
+  await setSel(1, 'why', WHY_SYN);
+  await setSel(10, 'ans', T3_WRONG);
+  await ev(`document.getElementById('sheetSaveBtn').click()`);
+  const back3 = await waitFor(`(function(){var li=document.querySelectorAll('#sheetAuto .auto-item')[2];return li&&li.className.indexOf('auto-no')>=0;})()`, 40, 300);
+  const a3 = await ev(`(function(){var li=document.querySelectorAll('#sheetAuto .auto-item')[2];return {note:li.querySelector('.auto-note').textContent,
+    t1:document.querySelectorAll('#sheetAuto .auto-item')[0].className, red:document.querySelectorAll('#sheetBody tr[data-rowi="10"] .sheet-wrong').length};})()`);
+  ok(back3, '任务三选择题选错 → 任务三 变 ❌（' + a3.note + '）');
+  ok(a3.t1.indexOf('auto-ok') >= 0, '任务一 改回来就对得上 ✅（老师 2026-10-14：学生完成这个选择就算分）');
+  ok(a3.red >= 1, '任务三那一格在学生端被打上红框（' + a3.red + ' 格）');
   ok(await ev(`document.querySelectorAll('#sheetAuto .auto-item')[1].className.indexOf('auto-ok')>=0`), '任务二 不受影响，仍然是 ✅');
 
   console.log('\n-- 7. 窄屏 500px 不撑破');
@@ -208,21 +252,23 @@ const RES_NONE = '屏幕上什么也没有输出（无解）';
   const rowA = rowsAll.filter((s) => s.name === A)[0];
   const rowB = rowsAll.filter((s) => s.name === B)[0];
   ok(!!rowA, '交过的学生 ' + A + ' 出现在名单里（' + rowsAll.length + ' 人）');
-  // 第 6 步故意把任务一改错了，所以此刻系统分是 1（任务二对、任务一错）。
-  ok(rowA && rowA.auto && rowA.auto.score === 1 && rowA.auto.tasks[0].ok === false && rowA.auto.tasks[1].ok === true,
-    '老师看到的系统分 = 1（任务一 ❌、任务二 ✅；任务三归老师批）');
-  ok(rowA && rowA.rows && rowA.rows.length === 12, '收上来 12 行（与可填行一一对上）');
-  ok(rowA && rowA.auto && rowA.auto.tasks.filter((t) => !t.graded).length === 1, '系统只判了 2 个任务，第 3 个明写“由老师批阅”');
-  ok(rowA && rowA.auto && (rowA.auto.cells || []).length === 12 && rowA.auto.tasks.some((t) => t.manual === 1),
-    '系统判的 12 格（任务一 6 + 任务二 6）逐格带标准答案给老师看；另有 1 格归老师');
+  // 第 6b 步把任务三那道选择题故意选错了，所以此刻系统分是 2（任务一、二对，任务三错）。
+  ok(rowA && rowA.auto && rowA.auto.score === 2 && rowA.auto.tasks[0].ok === true
+     && rowA.auto.tasks[1].ok === true && rowA.auto.tasks[2].ok === false,
+    '老师看到的系统分 = 2（任务一 ✅、任务二 ✅、任务三选择题 ❌）');
+  ok(rowA && rowA.rows && rowA.rows.length === 11, '收上来 11 行（12 个可填行里，35/94 那一行全是题目印好的，前端不提交）');
+  ok(rowA && rowA.auto && rowA.auto.tasks.filter((t) => !t.graded).length === 0, '三个任务都有系统分（这一课不再有“整题归老师批”的任务）');
+  ok(rowA && rowA.auto && (rowA.auto.cells || []).length === 12 && rowA.auto.tasks.reduce((n, t) => n + t.manual, 0) === 2,
+    '系统判的 12 格（任务一 6 + 任务二运行记录 2 + 任务二补程序 3 + 任务三选择 1）逐格带标准答案给老师看；另有 2 格归老师（改进意见、新创想）');
   ok(!!rowB && !rowB.submitted, '没交的 ' + B + ' 仍然在名单上、也能赋分（不做自动打 0）');
-  // 老师给两个任务打勾 → 证书里算的任务单得分（证书只认老师打的勾）
+  // 老师逐个任务打勾 → 证书里算的任务单得分（证书只认老师打的勾，不认系统分）
   const m1 = await jfetch('/api/teacher/sheet-board/' + LID + '/task', 'POST', { uid: rowA.uid, task: 1, ok: true }, T);
   const m2 = await jfetch('/api/teacher/sheet-board/' + LID + '/task', 'POST', { uid: rowA.uid, task: 2, ok: true }, T);
-  ok(m1.j.ok !== false && m2.j.ok !== false, '赋分台逐题打勾（任务一 ✓、任务二 ✓）能落盘');
+  const m3 = await jfetch('/api/teacher/sheet-board/' + LID + '/task', 'POST', { uid: rowA.uid, task: 3, ok: true }, T);
+  ok(m1.j.ok !== false && m2.j.ok !== false && m3.j.ok !== false, '赋分台逐题打勾（任务一 ✓、任务二 ✓、任务三 ✓）能落盘');
   const board2 = await jfetch('/api/teacher/sheet-board/' + LID + '?class=' + encodeURIComponent(CLA), 'GET', null, T);
   const rowA2 = (board2.j.students || []).filter((s) => s.name === A)[0];
-  ok(rowA2 && rowA2.score === 2, '打勾后总分 = 2（这一课任务单满分 3，第 3 题等老师再判）');
+  ok(rowA2 && rowA2.score === 3, '老师三个都打勾 → 任务单得分 = 3（满分；系统分 2 不影响老师自己判的分）');
   await shot(`document.getElementById('sheetBody')`, '03-任务单下半（完善程序与练习）.png');
 
   child.kill();

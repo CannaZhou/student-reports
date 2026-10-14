@@ -304,12 +304,16 @@
       const imgs = (b && b.rowImages) || [];
       for (let i = 0; i < (b.rows || 0); i++) {
         const row = byIdx[gi + i];
+        // 题目印好的数据（preset）——第5课运行记录表第一行（35/94）整行都是给定的，
+        //   学生一个格子都不用填，所以这一行根本不会出现在提交里；不认 preset 的话老师就看不到它。
+        const pre = ((b && b.preset) || {})[i] || null;
+        const hasPre = !!(pre && Object.keys(pre).length);
         // 只印「学生填过的行」和「有行标签的行」（行标签让学生留空的项也看得见）
-        if (!row && !labels[i] && !imgs[i]) continue;
+        if (!row && !labels[i] && !imgs[i] && !hasPre) continue;
         const tr = el('tr');
         cols.forEach((c, ci) => {
           const tc = el('td');
-          const v = row ? (row[c.key] || '') : '';
+          const v = (row && row[c.key]) || (pre && pre[c.key] != null ? String(pre[c.key]) : '');
           // 行首是数据图（第2课活动一）时给老师放个小缩略图，省得对着“图①”猜是哪张图。
           // 只认「这次交的」数据（存的是“图①”角标）；改图前交的老数据存的是原来那版题面文字，
           // 配上新图会张冠李戴，所以老数据照旧只印它当时填的那行字。

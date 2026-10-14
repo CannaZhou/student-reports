@@ -72,11 +72,12 @@ async function jfetch(path, method, body, ck) {
   // ---- 课内任务单 ----
   const sheet = (await jfetch('/api/lesson/' + LESSON + '/sheet', 'GET', null, S)).j;
   const sec = sheet.sheet.sections;
-  ok(sec && sec.length === 7, '任务单 7 个板块（任务一 ×3 + 任务二 ×3 + 任务三 ×1，实际 ' + (sec && sec.length) + '）');
-  ok(def.sheet.sections.map((b) => b.task).join(',') === '1,1,1,2,2,2,3',
-    '七个板块归到三个任务（任务一＝三个程序各一块，任务二＝运行记录+补程序+改进意见）');
+  ok(sec && sec.length === 8, '任务单 8 个板块（任务一 ×3 + 任务二 ×3 + 任务三 ×2，实际 ' + (sec && sec.length) + '）');
+  ok(def.sheet.sections.map((b) => b.task).join(',') === '1,1,1,2,2,2,3,3',
+    '八个板块归到三个任务（任务一＝三个程序各一块，任务二＝运行记录+补程序+选改进意见，任务三＝选问题+写创想）');
   ok(def.sheet.taskCount === 3, '任务单满分＝3 题（一个任务 1 分）');
-  ok(def.sheet.sections.filter((b) => b.keys).length === 5, '五个板块写了标准答案（只有改进意见、课后练习两块开放题没有）');
+  ok(def.sheet.sections.filter((b) => b.keys).length === 6,
+    '六个板块写了标准答案（只有「改进意见」「我的新创想」两块开放题没有）');
 
   // 三个程序：bug 必须原样带过来，否则学生看不到要调的东西
   const c1 = sec[0].code || '', c2 = sec[1].code || '', c3 = sec[2].code || '';
@@ -100,18 +101,35 @@ async function jfetch(path, method, body, ck) {
     '任务二（1）运行记录表 3 行 × 3 列');
   ok(sec[3].preset['0'].tou === '35' && sec[3].preset['1'].jiao === '50' && sec[3].preset['2'].tou === '60' && sec[3].preset['2'].jiao === '66',
     '三组头/脚数都是题目印好的（35/94、20/50、60/66）');
+  ok(sec[3].preset['0'].res === '23只鸡，12只兔' && !def.sheet.sections[3].keys['0'],
+    '第一行（35 头 94 脚）是课本例题，答案直接印出来、不用学生选也不判分（老师 2026-10-14）');
   ok(sec[3].cols[2].pick.length === 4, '运行结果也做成 4 选 1 的下拉（含「12只鸡，23只兔」这个鸡兔颠倒的干扰项）');
   ok(sec[3].cols[2].pick.some((w) => w.indexOf('无解') >= 0), '里面有「屏幕上什么也没有输出（无解）」这一项');
+  ok(Object.keys(def.sheet.sections[3].keys).join(',') === '1,2', '剩下 20/50、60/66 两行才是学生要填、要判的');
 
   ok(sec[4].rows === 3 && sec[4].cols.length === 2 && sec[4].rowLabels.length === 3,
     '任务二（2）jie 完善程序做成 3 行 × 2 列（行标签写问题，另一列选 0/1）');
   ok(sec[4].cols[1].pick.join(',') === '0,1', '选值列是 0/1 二选一');
   ok((sec[4].code || '').includes('print("此题无解")') && (sec[4].code || '').includes('jie = ①'),
     '完善程序的代码块里带着 ①②③ 空位和「此题无解」那一句');
+  ok(sec[4].image && sec[4].image.src === '/img/g6l5-jie-flow.png',
+    '任务二（2）挂上了老师给的流程图（老师 2026-10-14 要求，作参考）');
+  ok(sec[4].heading.indexOf('没有答案时怎么办') >= 0, '这一块标题写明是「给程序补上"没有答案时怎么办"」');
+  const imgFile = require('fs').statSync(require('path').join(__dirname, '..', 'app', 'public', sec[4].image.src));
+  ok(imgFile.size > 10000, '流程图文件真的在 app/public 里（' + Math.round(imgFile.size / 1024) + 'KB），新克隆也拉得到');
 
-  ok(sec[5].rows === 1 && sec[5].cols.length === 1, '任务二（3）算法改进意见：1 行 1 列开放填写');
-  ok(sec[6].rows === 2 && sec[6].cols.map((c) => c.key).join(',') === 'problem,idea',
-    '任务三（课后练习）2 行 × 2 列：发现的问题 / 解决问题的创想');
+  ok(sec[5].rows === 1 && sec[5].cols.length === 1, '任务二（3）算法改进意见：1 行 1 列');
+  ok(sec[5].cols[0].pick && sec[5].cols[0].pick.length === 4,
+    '改进意见做成了 4 选 1 的下拉（老师 2026-10-14：这里也做成选择）');
+  ok(!def.sheet.sections[5].keys, '改进意见不判分（没有唯一答案），留给老师看学生选了哪条思路');
+  ok(sec[6].rows === 1 && sec[6].cols.map((c) => c.key).join(',') === 'ans',
+    '任务三（1）是一条选择题：1 行 × 1 列下拉');
+  ok(sec[6].cols[0].pick.length === 4, '选择题 4 个选项');
+  ok(def.sheet.sections[6].keys && def.sheet.sections[6].keys[0].ans === sec[6].cols[0].pick[0],
+    '选择题有标准答案（选对了任务三才得分），答案就在候选词里');
+  ok(sec[7].rows === 1 && sec[7].cols.map((c) => c.key).join(',') === 'idea',
+    '任务三（2）是一条填空题：1 行 × 1 列自由写');
+  ok(!def.sheet.sections[7].keys, '新创想不判分（开放题），留给老师看');
   // 通例：每个板块都得有「能填的格子」。rowLabels 只贴第一列，所以带 rowLabels 的板块至少要 2 列。
   const noField = sec.filter((b) => (b.flow ? !(b.flow.blanks || []).length
     : (b.cols || []).length < ((b.rowLabels || []).length ? 2 : 1)));
@@ -119,9 +137,10 @@ async function jfetch(path, method, body, ck) {
   ok(!/keys|matchBy|want/.test(JSON.stringify(sheet.sheet)), '任务单已脱敏：标准答案（keys）和 matchBy 没下发（是白名单，不是黑名单）');
   ok(!/accepts|expl|answer/.test(JSON.stringify(sheet.sheet)), '任务单已脱敏（不含 accepts/解析）');
 
-  // 交任务单：12 个可填行 —— 任务一 3 行、运行记录 3 行、jie 3 行、改进意见 1 行、练习 2 行
+  // 交任务单：12 个可填行 —— 任务一 3 行、运行记录 3 行（第一行全印好、学生不用填）、
+  //   jie 3 行、改进意见 1 行、任务三 选择 1 行 + 填空 1 行
   const S1 = def.sheet.sections; // 服务端定义里才有 keys
-  const ERR = S1[0].cols[0].pick, WHY = S1[0].cols[1].pick, RES = S1[3].cols[2].pick;
+  const ERR = S1[0].cols[0].pick, WHY = S1[0].cols[1].pick;
   ok(ERR.includes(S1[0].keys['0'].msg) && WHY.includes(S1[0].keys['0'].why),
     '标准答案就是候选词本身（程序一＝NameError + 变量名大小写）——字符串逐字相同，学生选得到');
   ok(new Set(S1.slice(0, 3).map((b) => b.keys['0'].msg)).size === 3
@@ -132,33 +151,43 @@ async function jfetch(path, method, body, ck) {
     { _i: 0, msg: K[0][0].msg, why: K[0][0].why },
     { _i: 1, msg: K[1][0].msg, why: K[1][0].why },
     { _i: 2, msg: K[2][0].msg, why: K[2][0].why },
-    { _i: 3, tou: '35', jiao: '94', res: K[3][0].res },
+    // _i 3 是 35/94 那一行：三格全是题目印好的，学生一个格子都不用填 → 前端根本不会提交这一行
     { _i: 4, tou: '20', jiao: '50', res: K[3][1].res },
     { _i: 5, tou: '60', jiao: '66', res: K[3][2].res },
     { _i: 6, val: K[4][0].val }, { _i: 7, val: K[4][1].val }, { _i: 8, val: K[4][2].val },
-    { _i: 9, idea: '把 35、94、36 都改成变量放在程序最前面，或者用 input() 让用户自己输入。' },
-    { _i: 10, problem: '头数和脚数配得不合理时它只说“此题无解”。', idea: '提示得更具体：头数脚数不可能配出鸡兔。' },
-    { _i: 11, problem: '头数特别大时要等很久。', idea: '从头数的一半往后试，能少试一半。' },
+    { _i: 9, idea: S1[5].cols[0].pick[1] },
+    { _i: 10, ans: K[6][0].ans },
+    { _i: 11, idea: '让用户自己输入头数和脚数，再判断这两个数能不能配出鸡兔。' },
   ];
   const save = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST', { rows: rows() }, S)).j;
-  ok(save.ok && save.rows.length === 12, '任务单保存 12 行（实际 ' + (save.rows || []).length + '）');
+  ok(save.ok && save.rows.length === 11, '任务单保存 11 行（35/94 那行全印好，不算学生填的，实际 ' + (save.rows || []).length + '）');
+  const saveFull = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST',
+    { rows: rows().concat([{ _i: 3, tou: '35', jiao: '94', res: K[3][1].res }]) }, S)).j;
+  ok(saveFull.auto && saveFull.auto.score === 3,
+    '老版式的作答（把 35/94 那行的结果也交上来）照样判 3/3，preset 格不参与判分（实际 ' + (saveFull.auto && saveFull.auto.score) + '）');
   const back = (await jfetch('/api/lesson/' + LESSON + '/sheet', 'GET', null, S)).j;
   const g = (i) => (back.prev || []).find((r) => r._i === i) || {};
   ok(g(0).msg === K[0][0].msg, '程序一的报错选择能回读');
   ok(g(5).res === K[3][2].res, '60 头 66 脚那行的「无解」能回读');
   ok(g(7).val === '1', 'jie ②「找到答案以后＝1」能回读');
+  ok(g(9).idea === S1[5].cols[0].pick[1], '改进意见的下拉选择能回读');
+  ok(g(10).ans === K[6][0].ans, '任务三选择题的作答能回读');
 
   // ---- 系统按任务判分 ----
   const a = back.auto;
   ok(!!a, '任务单接口带回了系统判分结果');
   ok(a && a.taskFull === 3, '任务单满分＝3（一个任务 1 分）');
-  ok(a && a.score === 2, '全对 → 系统 2/3（任务一 + 任务二；任务三开放题系统不判，实际 ' + (a && a.score) + '）');
-  ok(a && a.tasks.map((t) => String(t.ok)).join(',') === 'true,true,null',
-    '任务一/二判对、任务三不判（true,true,null，实际 ' + (a && a.tasks.map((t) => String(t.ok)).join(',')) + '）');
-  ok(a && a.tasks.map((t) => t.title).join(',') === '调试程序,模拟情境 完善算法,发现问题与解决问题的创想',
-    '三个任务的名字与任务单一致');
-  ok(a && a.tasks[2].graded === false && a.tasks[2].manual === 4, '任务三没有标准答案 → 明说由老师批（4 格归老师）');
+  ok(a && a.score === 3, '全对 → 系统 3/3（任务三现在也能判了，实际 ' + (a && a.score) + '）');
+  ok(a && a.tasks.map((t) => String(t.ok)).join(',') === 'true,true,true',
+    '三个任务全判对（true,true,true，实际 ' + (a && a.tasks.map((t) => String(t.ok)).join(',')) + '）');
+  ok(a && a.tasks.map((t) => String(t.graded)).join(',') === 'true,true,true', '三个任务现在都有系统判分');
+  ok(a && a.tasks.map((t) => t.title).join(',') === '调试程序,模拟情境 完善算法,运行完善后的程序，发现问题与提出新创想',
+    '三个任务的名字与任务单一致（任务三按老师 2026-10-14 的说法改名）');
+  ok(a && a.tasks[2].cells === 1 && a.tasks[2].manual === 1,
+    '任务三只有选择题那 1 格判分，新创想那 1 格归老师');
   ok(a && a.tasks[1].manual === 1, '任务二里有 1 格（算法改进意见）系统不判、留给老师');
+  ok(a && a.tasks.reduce((n, t) => n + t.manual, 0) === 2,
+    '全表只有 2 格留给老师（任务二改进意见 + 任务三新创想，都是开放写的）');
   ok(a && (a.wrong || []).length === 0, '全对时没有标红的格子');
   ok(a && !/want/.test(JSON.stringify(a)), '学生拿到的判分结果里没有标准答案');
 
@@ -166,10 +195,21 @@ async function jfetch(path, method, body, ck) {
   const badRows = rows();
   badRows[1].why = WHY.filter((w) => w !== K[1][0].why)[0];
   const save2 = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST', { rows: badRows }, S)).j;
-  ok(save2.auto && save2.auto.score === 1, '程序二改错一处 → 系统降到 1/3（实际 ' + (save2.auto && save2.auto.score) + '）');
+  ok(save2.auto && save2.auto.score === 2, '程序二改错一处 → 系统降到 2/3（实际 ' + (save2.auto && save2.auto.score) + '）');
   ok(save2.auto && save2.auto.tasks[0].ok === false && save2.auto.tasks[0].wrong === 1, '任务一被判错，且只指出 1 处');
   ok(save2.auto && (save2.auto.wrong || []).some((w) => w.i === 1 && w.col === 'why'), '标红的是第 2 行（程序二）的「错在哪里」格');
   ok(save2.auto && save2.auto.tasks[1].ok === true, '任务二不受影响（这就是「按任务分别判分」）');
+  // 任务三那道选择题选错 → 任务三 0 分，任务一/二不受影响
+  const badPick = rows();
+  badPick[9].ans = S1[6].cols[0].pick.filter((w) => w !== K[6][0].ans)[0];
+  const save3 = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST', { rows: badPick }, S)).j;
+  ok(save3.auto && save3.auto.score === 2 && save3.auto.tasks[2].ok === false,
+    '任务三选择题选错 → 任务三 0 分、总分 2/3（老师口径：学生完成这个选择就算分）');
+  ok(save3.auto && (save3.auto.wrong || []).some((w) => w.i === 10 && w.col === 'ans'), '标红的是任务三那一格');
+  // 没选（留着空交）也判错，不能靠不答蒙分
+  const noPick = rows().filter((r) => r._i !== 10);
+  const save4 = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST', { rows: noPick }, S)).j;
+  ok(save4.auto && save4.auto.tasks[2].ok === false, '任务三选择题空着不选 → 一样算错');
   // 只填对一半：任务一整块没动时不能蒙混过关
   const missOne = (await jfetch('/api/lesson/' + LESSON + '/sheet/submit', 'POST',
     { rows: rows().filter((r) => r._i !== 2) }, S)).j;
@@ -193,13 +233,13 @@ async function jfetch(path, method, body, ck) {
 
   // ---- 教师赋分台 ----
   const bd0 = (await jfetch('/api/teacher/sheet-board/' + LESSON + '?class=' + encodeURIComponent(CLA), 'GET', null, T)).j;
-  ok(bd0.sheet.sections.length === 7, '教师端拿到 7 个板块定义');
+  ok(bd0.sheet.sections.length === 8, '教师端拿到 8 个板块定义');
   const me0 = (bd0.students || []).find((x) => x.uid === NAME + '｜' + CLA);
-  ok(me0 && me0.submitted && me0.rows.length === 12, '教师端看到该生的 12 行');
-  ok(me0 && me0.auto && me0.auto.score === 2, '教师端也有系统判分（2/3）');
+  ok(me0 && me0.submitted && me0.rows.length === 11, '教师端看到该生的 11 行（35/94 那行全印好，不占学生作答）');
+  ok(me0 && me0.auto && me0.auto.score === 3, '教师端也有系统判分（3/3）');
   ok(me0 && me0.auto.cells.every((c) => c.want !== undefined) && me0.auto.cells.length === 12,
     '教师端 12 个系统判的格子每格都带标准答案（改分时看得见学生错在哪）');
-  ok(me0 && me0.auto.tasks.filter((t) => !t.graded).length === 1, '第 3 个任务明写「由老师批阅」');
+  ok(me0 && me0.auto.tasks.every((t) => t.graded), '三个任务现在都判得出分（任务三有选择题了）');
   ok((bd0.lesson.tasks || []).length === 3, '赋分台那一排「逐题打勾」按钮＝3 个任务');
 
   // 老师逐题打勾 → 证书/成绩里的任务单得分（证书只认老师打的勾）
@@ -217,7 +257,7 @@ async function jfetch(path, method, body, ck) {
     '证书口径：小测 5/5 + 老师评的任务单 3/3（实际 ' + (cert && cert.quizScore) + '+' + (cert && cert.taskScore) + '）');
   ok(cert && cert.pending === false, '老师已批 → 不再显示「待批阅」');
   ok(cert && cert.pct === 100, '综合 100%（5 + 3 = 8/8，实际 ' + (cert && cert.pct) + '%）');
-  // 关键口径：证书只认老师打的勾，系统判的 2/3 不算 —— 老师那三个勾是这一课 3 分的唯一来源
+  // 关键口径：证书只认老师打的勾，系统判的 3/3 不算 —— 老师那三个勾是这一课 3 分的唯一来源
   ok(cert && cert.earned === 8 && cert.total === 8, '证书得分/满分＝8/8');
   const wall1 = (await jfetch('/api/student/certs', 'GET', null, S)).j;
   const w2 = (wall1.items || []).find((x) => x.lessonId === LESSON);
