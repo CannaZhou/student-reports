@@ -420,8 +420,7 @@
       if (s.heading) card.appendChild(el('div', 'sheet-heading', s.heading));
       if (s.caption) card.appendChild(el('div', 'sheet-caption', s.caption));
       if (s.intro) card.appendChild(el('p', 'muted', s.intro));
-      if (s.image && s.image.src) card.appendChild(sheetFigure(s.image));
-      if (s.code) card.appendChild(sheetCode(s.code));
+      sheetMedia(s, card);
     }
 
     blocks.forEach((b, bi) => {
@@ -430,14 +429,12 @@
         host.appendChild(el('div', 'sheet-sec-head', b.heading || ('活动' + (bi + 1))));
         if (b.caption) host.appendChild(el('div', 'sheet-caption', b.caption));
         if (b.intro) host.appendChild(el('p', 'muted', b.intro));
-        if (b.image && b.image.src) host.appendChild(sheetFigure(b.image));
-        if (b.code) host.appendChild(sheetCode(b.code));
+        sheetMedia(b, host);
       } else {
         if (b.heading) host.appendChild(el('div', 'sheet-heading', b.heading));
         if (b.caption) host.appendChild(el('div', 'sheet-caption', b.caption));
         if (b.intro) host.appendChild(el('p', 'muted', b.intro));
-        if (b.image && b.image.src) host.appendChild(sheetFigure(b.image));
-        if (b.code) host.appendChild(sheetCode(b.code));
+        sheetMedia(b, host);
       }
       // 板块可以是一整张流程图（任务二）：不判分，选完跟着任务单一起存给老师看
       if (b.flow) host.appendChild(buildSheetFlow(b, prevMap, gi));
@@ -625,6 +622,23 @@
     const pre = el('pre', 'sheet-code');
     pre.textContent = String(code).replace(/\t/g, '    ').replace(/\s+$/, '');
     return pre;
+  }
+
+  // 图和程序怎么摆（老师 2026-10-14：「图太大了，左边是图，右边是程序」）。
+  // 一个板块同时有图又有代码块时——目前只有六上第5课任务二②那张算法流程图 + 完善后的程序——
+  // 就把它们并排：图缩到左边约四成、程序整块摆右边（不再各占一整行、图铺满半个屏幕）。
+  // 其它情况还是老样子，一个接一个竖着放；窄屏由 CSS 回落成上下。
+  function sheetMedia(b, host) {
+    const hasImg = !!(b.image && b.image.src);
+    if (hasImg && b.code) {
+      const box = el('div', 'sheet-split');
+      box.appendChild(sheetFigure(b.image));
+      box.appendChild(sheetCode(b.code));
+      host.appendChild(box);
+      return;
+    }
+    if (hasImg) host.appendChild(sheetFigure(b.image));
+    if (b.code) host.appendChild(sheetCode(b.code));
   }
 
   // 预填：新数据带 _i（第几行），老数据没 _i 就按数组位置

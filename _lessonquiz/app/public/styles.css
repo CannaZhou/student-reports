@@ -199,6 +199,21 @@ table.sheet-table { margin-top: 6px; }
   border-radius: 8px; padding: 10px 12px; margin: 8px 0 10px;
   white-space: pre; overflow-x: auto;
 }
+/* 图 + 程序并排（六上第5课任务二②：完善后的算法流程图 + 完善后的程序）。
+   那张流程图是 1703×1820 的竖长图，原来整宽铺开一个人占半屏，老师要求「左边是图，右边是程序」。
+   图压到左边四成左右（height:auto 等比缩），程序整块摆右边；程序框内横滑不撑破整页。
+   窄屏（≤640px）回落成上下：手机上并排两边都读不清。 */
+.sheet-split { display: flex; gap: 14px; align-items: flex-start; margin: 8px 0 10px; }
+.sheet-split > .sheet-figure { flex: 0 0 42%; max-width: 42%; margin: 0; }
+.sheet-split > .sheet-figure img { width: 100%; }
+.sheet-split > pre.sheet-code { flex: 1 1 auto; min-width: 0; margin: 0; }
+@media (max-width: 640px) {
+  /* 竖排时必须 align-items:stretch —— 基类的 flex-start 在 column 下会让两项各自
+     按内容撑（图里 img 是 width:100%，父宽退化到图片原始宽度 1703px），整页横滑。 */
+  .sheet-split { flex-direction: column; align-items: stretch; gap: 8px; }
+  .sheet-split > .sheet-figure { flex: 0 0 auto; max-width: 100%; }
+  .sheet-split > pre.sheet-code { width: auto; max-width: 100%; }
+}
 /* 题目已印好、不用学生抄的格子（preset，如「头 35、脚 94」）：置灰 */
 .sheet-table td.sheet-pre .sheet-cell { background: #f1f3f4; color: var(--ink-2); font-weight: 600; }
 /* 行标签（对象列印好“鸡/兔”，不可改）与已知行（合计行 35/35/94） */

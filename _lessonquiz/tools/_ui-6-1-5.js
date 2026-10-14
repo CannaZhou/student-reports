@@ -1,6 +1,6 @@
 // 六上第5课《算法的执行》学生端自检：
 //   任务单三个程序真的渲染成代码块（程序二那个冒号是全角、程序三那行真没缩进、程序一真是 Tu）、
-//   任务一/任务二的下拉候选词个数对、任务三明说“由老师批阅”、窄屏 500px 不撑破；
+//   任务一/任务二的下拉候选词个数对、任务二（2）流程图在左/完善程序在右（并排）、窄屏 500px 不撑破；
 //   教师端「赋分台」能列出三个任务和交上来的学生。
 // 用法：BASE=http://127.0.0.1:7099 node tools/_ui-6-1-5.js   （跑在隔离实例上，别指生产）
 const { spawn } = require('child_process');
@@ -169,6 +169,38 @@ const T3_WRONG = '算不出答案的时候，程序会一直循环下去、停�
   ok(fig && fig.src === '/img/g6l5-jie-flow.png', '图就是老师给的那张流程图：' + (fig && fig.src));
   ok(fig && fig.cap.length > 0, '图下面有说明文字：' + (fig && fig.cap));
   ok(fig && fig.iw <= 480, '流程图收在 500px 视口里（' + (fig && Math.round(fig.iw)) + 'px）');
+  // 老师 2026-10-14：图太大了，左边是图，右边是程序
+  // 当前这个无头窗口只有 500px（窄屏），CSS 会回落成上下 —— 先按窄屏断言，再临时放大到 1200px 量并排。
+  const SPLIT_PROBE = `(function(){
+    var box=document.querySelector('#sheetBody .sheet-split');
+    if(!box) return null;
+    var f=box.querySelector('.sheet-figure'), c=box.querySelector('pre.sheet-code');
+    if(!f||!c) return null;
+    var fr=f.getBoundingClientRect(), cr=c.getBoundingClientRect();
+    return {figLeft:Math.round(fr.left), figRight:Math.round(fr.right), figW:Math.round(fr.width),
+            figTop:Math.round(fr.top), figBottom:Math.round(fr.bottom),
+            codeLeft:Math.round(cr.left), codeTop:Math.round(cr.top), codeW:Math.round(cr.width),
+            bodyW:Math.round(document.getElementById('sheetBody').getBoundingClientRect().width)};})()`;
+  const narrow = await ev(SPLIT_PROBE);
+  ok(!!narrow, '图 + 完善后的程序放在同一个 .sheet-split 盒里（不是各占一整行）');
+  ok(narrow && narrow.figBottom <= narrow.codeTop + 1,
+    '窄屏（476px）回落成上下：图在上、程序在下（图底 ' + (narrow && narrow.figBottom) + ' ≤ 程序顶 ' + (narrow && narrow.codeTop) + '）');
+  await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(350);
+  const wide2 = await ev(SPLIT_PROBE);
+  ok(wide2 && wide2.figRight <= wide2.codeLeft + 1,
+    '宽屏下横过来：图在左、程序在右（图右边缘 ' + (wide2 && wide2.figRight) + ' ≤ 程序左边缘 ' + (wide2 && wide2.codeLeft) + '）');
+  ok(wide2 && wide2.figW < wide2.codeW, '图比程序窄（图 ' + (wide2 && wide2.figW) + ' < 程序 ' + (wide2 && wide2.codeW) + '）');
+  ok(wide2 && wide2.figW <= wide2.bodyW * 0.5,
+    '图只占左半边、不再铺满半个屏幕（' + (wide2 && wide2.figW) + ' ≤ 半宽 ' + (wide2 && Math.round(wide2.bodyW / 2)) + '）');
+  ok(wide2 && wide2.figTop === wide2.codeTop,
+    '图和程序顶对齐、并排摆（都在 ' + (wide2 && wide2.figTop) + '）');
+  const shotWide = await ev(`document.getElementById('sheetBody').getBoundingClientRect().height`);
+  ok(!(await ev(`document.getElementById('sheetBody').scrollWidth > document.getElementById('sheetBody').clientWidth + 1`)),
+    '并排后任务单没有横向溢出（高 ' + Math.round(shotWide) + 'px）');
+  await shot(`document.getElementById('sheetBody')`, '04-任务单（宽屏·左图右程序）.png');
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(350);
 
   console.log('\n-- 5. 全填对 → 保存 → 系统判分');
   const setSel = async (i, col, v) => ev(`(function(){var f=document.querySelector('tr[data-rowi="${i}"] [data-col="${col}"]');f.value=${JSON.stringify(v)};return 1;})()`);
