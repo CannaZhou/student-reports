@@ -242,6 +242,28 @@ function mk(ws) {
   ok(a4.score === '1' && /任务①❌/.test(((a4.btns || [])[0] || {}).t || '') && /任务③❌/.test(((a4.btns || [])[2] || {}).t || ''),
     '再把任务③也改成 ✗ → 1 分（只剩任务②是✓：' + (a4.btns || []).map((b) => b.t).join(' ') + '）');
 
+  console.log('\n-- 3b. 系统判错的题，老师要能翻成 ✓（学生其实是对的）');
+  // 乙的任务②系统判 ❌。老师点一下＝「学生其实做对了，这一分给他」；再点一下＝撤销那层，
+  // 退回系统的判定。**原来这里点下去是把标记删掉、又落回系统判的 ❌ —— 转一圈回到原地，
+  // 老师想给分给不了，看着就是「点不动、撤不掉」**（2026-10-14 老师报的正是这个：
+  // 系统判错、他仔细一看学生是对的，却没法把这一分要回来）。
+  ok((kb.btns || [])[1].t === '任务②❌' && kb.btns[1].c.indexOf('st-sys') >= 0,
+    '（前置）乙的任务②是系统判的 ❌（虚框）');
+  await ev(clickSysTask(B, 1));
+  const bFlip = (await waitRow(B, (r) => ((r.btns || [])[1] || {}).t === '任务②✅')) || {};
+  ok(((bFlip.btns || [])[1] || {}).c.indexOf('st-teacher') >= 0 && bFlip.btns[1].s === 'solid',
+    '点一下系统判错的题 → 当场变 ✅ 实框（老师判学生对）：' + (bFlip.btns || []).map((b) => b.t).join(' '));
+  ok(bFlip.score === '3', '这一分真给学生了（乙三题都 ✓ → 3 分，不是原地不动）');
+  await ev(clickSysTask(B, 1));
+  const bUndo = (await waitRow(B, (r) => ((r.btns || [])[1] || {}).t === '任务②❌'
+    && ((r.btns || [])[1] || {}).c.indexOf('st-sys') >= 0)) || {};
+  ok(bUndo.score === '2', '再点一下 → 撤销那层，回到系统判的 ❌（总分 2）：'
+    + (bUndo.btns || []).map((b) => b.t).join(' '));
+  const srvB1 = ((await jfetch('/api/teacher/sheet-board/6-1-4?class=' + encodeURIComponent(CLA), 'GET', null, T)).j.students || [])
+    .find((x) => x.uid === B + '｜' + CLA) || {};
+  ok(srvB1.score === 2 && !srvB1.taskMarks['2'],
+    '落盘也一致：任务②那层标记被撤掉、回到系统判定：' + JSON.stringify(srvB1.taskMarks));
+
   console.log('\n-- 4. 「按系统分填」＝一键采纳系统的逐题判定');
   await ev(`(function(){var r=[].filter.call(document.querySelectorAll('.tbl tr'),function(x){return x.textContent.indexOf(${JSON.stringify(B)})>=0 && x.querySelector('input.score-in');})[0];
     if(!r) return 0; r.querySelector('.sys-fill').click(); return 1;})()`);

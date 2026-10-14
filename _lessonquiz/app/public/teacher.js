@@ -609,12 +609,16 @@
       // applyScore() 更新的是 s.taskMarks，抄一份就会变成「总分变了、按钮还停在旧判定」。
       let busy = false;
       const autoTask = (no) => (((s.auto && s.auto.tasks) || []).filter((x) => x.no === no)[0]) || null;
+      // 系统对某一题的判定：true/false，判不了（自由填写、没标准答案）就是 null
+      const sysOf = (no) => {
+        const t = autoTask(no);
+        return (t && t.graded) ? (t.ok === true) : null;
+      };
       // 这一题「现在显示成什么」：老师判过就用老师的，否则用系统的（系统也判不了就是未标）。
       // src='sys' 表示「这一格的值和系统的判定一致（老师没改过它）」——所以按钮画成虚框，
       // 老师改过的那几题画实框，一眼能看出自己动了哪几题。
       const shownOf = (no) => {
-        const t = autoTask(no);
-        const sysV = (t && t.graded) ? (t.ok === true) : null;
+        const sysV = sysOf(no);
         const mine = (s.taskMarks && typeof s.taskMarks[no] === 'boolean') ? s.taskMarks[no] : null;
         if (mine === null) return sysV === null ? { v: null, src: 'none' } : { v: sysV, src: 'sys' };
         return { v: mine, src: (sysV !== null && sysV === mine) ? 'sys' : 'teacher' };
@@ -637,7 +641,17 @@
           b.onclick = async () => {
             if (busy) return; busy = true;
             const cur = shownOf(t.no);
-            const next = cur.v === null ? true : (cur.v === true ? false : null);
+            // 下一个状态分两种课看，别混：
+            // ① 系统判得出来的题（sysV 有值）：跟系统「一致 ↔ 反着判」来回 ——
+            //    系统✅→点一下是老师判✗、系统❌→点一下是老师判✓（把这一分要回来）、老师判过的再点＝撤销、回到系统那层
+            // ② 系统判不了的题（sysV=null，自由填写那种）：未标 → ✓ → ✗ → 未标 三态转圈
+            // ⚠️ 原来一律按 cur.v 转圈（true→false→null），**系统判成 ❌ 的题就死在这里**：
+            //   cur.v===false 直接跳 null＝删标记，删完又落回系统判的 ❌，转一圈回到原地 ——
+            //   老师觉得「学生其实是对的」想把这一分要回来，怎么点都点不动（2026-10-14 老师报的）。
+            const sysV = sysOf(t.no);
+            const next = sysV !== null
+              ? (cur.src === 'sys' ? !cur.v : null)
+              : (cur.v === null ? true : (cur.v === true ? false : null));
             try {
               // 关键：一次把「所有能定的题」整张表都写下去，而不是只写点中的这一题。
               // 只写这一题的话，系统预选的那几题在服务端还是空的，点一下总分就从 3 掉成 0；
@@ -652,7 +666,8 @@
                 { uid: s.uid, tasks: map });
               applyScore(r.score, r.scoredAt, r.termScore, r.tasks);
               toast('已把 ' + s.name + ' 的任务' + CIRC[t.no - 1] + ' 标为'
-                + (next === true ? '「✓对」' : (next === false ? '「✗错」' : '「未标」'))
+                + (next === true ? '「✓对」' : (next === false ? '「✗错」'
+                  : (autoTask(t.no) && autoTask(t.no).graded ? '「系统判定的结果」' : '「未标」')))
                 + '，本课共 ' + r.score + ' 分');
             } catch (e) { toast('逐题赋分失败：' + e.message); }
             busy = false;
@@ -672,8 +687,15 @@
               + (cur.v === true ? 'st-ok' : (cur.v === false ? 'st-no' : 'st-skip'))
               + (cur.src === 'sys' ? ' st-sys' : (cur.src === 'teacher' ? ' st-teacher' : ''));
             b.textContent = '任务' + CIRC[t.no - 1] + (cur.v === true ? '✅' : (cur.v === false ? '❌' : '➖'));
+            // 提示语跟上面 next 那套口径逐条对齐（系统判 ❌ 的题，点一下是「改成✓对」不是「撤销」）
+            const sv = sysOf(t.no);
             b.title = (t.title ? t.title + '：' : '') + srcText(cur) + '。点一下'
-              + (cur.v === null ? '标为「✓对」' : (cur.v === true ? '改成「✗错」' : '撤销（回到未标）'));
+              + (sv !== null
+                ? (cur.src === 'sys'
+                  ? (cur.v ? '改成「✗错」' : '改成「✓对」（老师认为学生是对的）')
+                  : '撤销（回到系统判定）')
+                : (cur.v === null ? '标为「✓对」'
+                  : (cur.v === true ? '改成「✗错」' : '撤销（回到未标）')));
           });
         };
         paintTasks();
