@@ -96,7 +96,8 @@ function register(router, { store, config }) {
     const rows = store.lastSheetRows(stu.uid, lesson.id);
     const g = rows.length ? gradeSheet(lesson.sheet, rows) : null;
     const auto = g && g.graded ? studentView(g) : null;
-    const forHint = { lesson, sheet, rows: draft.length ? draft : rows };
+    // question 也带上：离线兜底要用它判断孩子问的是不是「什么是××？」（名词解释）
+    const forHint = { lesson, sheet, rows: draft.length ? draft : rows, question: q };
 
     // —— 两道闸。到量了回 200 + source:'limit'（不是 429）：
     //    前端 api() 会把非 2xx 抛成错误、只在 toast 里闪一下，而限额提示应该正常渲染成一个气泡。

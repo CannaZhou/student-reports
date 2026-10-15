@@ -137,6 +137,60 @@ function withConfig(obj, fn) {
   }
 
   // ---------------------------------------------------------------
+  console.log('\n-- 3b. 四上第4课的老大难：任务一不判分，answerStrings 抓不到它的答案');
+  //   老师拍板任务一由他自己看（不给 keys），所以上面那条不变式对它是空跑的。
+  //   而这一课新加了 knowledge（课件第11~14页的概念），最容易手滑写进去的恰恰就是
+  //   课件第11页「人为窃取」下面那四条——也就是任务一要学生选出来的答案。这里单独钉一遍：
+  //   四条泄漏行为和四条建议，一个字都不许出现在知识块 / prompt / 离线话术里。
+  if (l4) {
+    const G4L4_ACTS = [
+      '连接不明 WIFI，账号密码被盗', '扫描不明二维码，个人信息泄露',
+      '快递盒乱丢弃，泄露了个人信息', '随意透露验证码、点开不明链接',
+    ];
+    const G4L4_TIPS = ['设成字母、数字、符号混合的密码', '不扫不明二维码、不随便填手机号',
+      '快递单撕掉或涂黑个人信息再扔', '不连不明 WIFI，验证码谁都不给'];
+    const knowJson = JSON.stringify(l4.knowledge || {}).replace(/\s+/g, '');
+    const badKnow = G4L4_ACTS.concat(G4L4_TIPS).filter((x) => knowJson.indexOf(x.replace(/\s+/g, '')) >= 0);
+    ok(!!l4.knowledge, '四上第4课写了 knowledge（' + Object.keys(l4.knowledge || {}).join('/') + '）');
+    ok(badKnow.length === 0, '知识块里没有任务一/任务二的答案原话'
+      + (badKnow.length ? '（漏了：' + badKnow.join(' / ') + '）' : '（查了 8 条）'));
+    const texts = agent.buildMessages({ lesson: l4, rows: [], auto: null, draft: [], history: [], question: '这一空填什么' })
+      .map((m) => m.content.replace(/\s+/g, ''));
+    const badPrompt = G4L4_ACTS.filter((x) => texts.some((t) => t.indexOf(x.replace(/\s+/g, '')) >= 0));
+    ok(badPrompt.length === 0, 'prompt 里也没有那四条泄漏行为' + (badPrompt.length ? '（漏了：' + badPrompt[0] + '）' : ''));
+    // 知识块得真有内容，别写成空壳糊弄过关
+    ok((l4.knowledge.points || []).length >= 4 && (l4.knowledge.words || []).length >= 1,
+      '知识块是实的（' + (l4.knowledge.points || []).length + ' 条概念 + '
+      + (l4.knowledge.words || []).length + ' 条名词 + ' + (l4.knowledge.tips || []).length + ' 条思路）');
+    const ctx = agent.contextOf(l4, { rows: [], auto: null, draft: [] });
+    ok(ctx.indexOf('数据安全，就是让我们的信息') >= 0, '知识块真的进了给模型的上下文');
+    ok(agent.containsSecret(agent.localHint({ lesson: l4, rows: [] }), l4) === false, '加了知识块之后，离线话术仍然不含答案');
+
+    // 没网的时候问「什么是××？」（首屏 chip 就是照 knowledge.words 生成的）得真答得上，
+    // 不能还是那句"任务一第 1 行还空着"——那是答非所问。
+    const cpt = agent.conceptReply({ lesson: l4, question: '什么是验证码？' });
+    ok(!!cpt && cpt.indexOf('验证码') >= 0, '离线问「什么是验证码？」答的是名词解释，不是指路');
+    ok(agent.containsSecret(cpt, l4) === false, '名词解释里没有某一格的标准答案');
+    ok(agent.conceptReply({ lesson: l4, question: '任务二第 2 行填什么？' }) === null,
+      '问的是某一格填什么 → 不走名词解释那条路（该去指路）');
+    ok(agent.fallbackReply({ lesson: l4, rows: [], question: '什么是数据安全？' }).indexOf('任务一') < 0,
+      '点 chip 问概念时，离线回复不再顺手把"任务一还空着"塞给他');
+  }
+
+  // 每一课都一样：名词解释是会被直接端给孩子的，所以它自己不能带答案
+  const knowLessons = lessons.filter((l) => l.knowledge && (l.knowledge.words || []).length);
+  if (knowLessons.length) {
+    const badDef = [];
+    for (const l of knowLessons) {
+      for (const w of l.knowledge.words) {
+        if (agent.containsSecret('**' + w.w + '**：' + w.d, l)) badDef.push(l.id + '/' + w.w);
+      }
+    }
+    ok(badDef.length === 0, '有 knowledge 的 ' + knowLessons.length + ' 课里，名词解释都不含本课标准答案'
+      + (badDef.length ? '（漏了：' + badDef.join('、') + '）' : ''));
+  }
+
+  // ---------------------------------------------------------------
   console.log('\n-- 4. 问问看到的 ⊆ 学生看到的（一块石头都不多给）');
   for (const l of lessons) {
     const pub = publicSheet(l.sheet);

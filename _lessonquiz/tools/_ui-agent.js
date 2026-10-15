@@ -249,8 +249,13 @@ function compile(expr) { try { new Function('return (' + expr + ')'); return nul
     ok(hd && hd.chips.length >= 2, '有快捷问法 chips（' + JSON.stringify(hd.chips) + '）');
     await shot('#askShell .ask-panel', '学生端-问问-刚打开.png');
 
-    // 点一个 chip 问一句
+    // 点一个 chip 问一句。
+    // ⚠ 别写死"第一个 chip 是「这一步该怎么想？」"——本课一有 knowledge.words，
+    //    排在前面的就变成「什么是××？」了（服务端就是这么排的）。所以点之前先把它记下来。
+    ok(hd && hd.chips.some((x) => x.indexOf('什么是') === 0),
+      '本课有知识点时，chips 里有「什么是××？」（' + JSON.stringify(hd && hd.chips) + '）');
     const l0 = Number((hd.left.match(/(\d+)/) || [])[1]);
+    const chip0 = hd.chips[0];
     await ev(`(function(){document.querySelector('#askShell .ask-chip').click();return 1})()`);
     await waitFor(`document.querySelectorAll('#askShell .chat-msg.user').length===1 && !document.querySelector('#askShell .chat-msg.typing')`, 40, 300);
     const a1 = await ev(`(function(){
@@ -321,7 +326,7 @@ function compile(expr) { try { new Function('return (' + expr + ')'); return nul
         var us=document.querySelectorAll('#askShell .chat-msg.user');
         return {n:us.length, first:us.length?us[0].textContent:'', hidden:document.querySelector('#askShell .ask-panel').hidden};})()`);
       ok(keep && keep.n === 2, '重新进任务单：之前聊过的还在，不用重问（' + (keep && keep.n) + ' 条我的提问）');
-      ok(keep && keep.first === '这一步该怎么想？', '第一条还是刚才那句（' + (keep && keep.first) + '）');
+      ok(keep && keep.first === chip0, '第一条还是刚才那句（' + (keep && keep.first) + '）');
       ok(keep && keep.hidden, '面板默认是收起的（悬浮按钮等着）');
     } else console.log('  （没找到返回按钮，跳过"聊过的还在"这一条）');
 

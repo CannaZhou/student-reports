@@ -151,6 +151,14 @@ function clip(s, n) {
   return t.length > n ? t.slice(0, n) + '…' : t;
 }
 
+// 引给学生看的提示语只取第一句。整段抄回去他读两遍就不读了，而且提示语后面
+// 常跟着一整句补充说明（有时还带老师改版时留下的括号），第一句才是要他回答的那个问题。
+function firstSentence(s, n) {
+  const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  const m = t.match(/^[^。！？!?]{2,80}[。！？!?]/);
+  return m ? m[0] : clip(t, n || 60);
+}
+
 function knowledgeText(k) {
   if (!k) return '（本课没有写补充知识点：只依据任务单上的材料回答，不要自己补充。\n' +
     '学生问课本上的道理时，说"这个我这儿没讲到，我们去问问老师吧"。）';
@@ -307,6 +315,22 @@ function buildMessages({ lesson, rows, auto, draft, history, question }) {
 }
 
 // ---------------------------------------------------------------
+// 「什么是××？」——首屏那几个 chip 就是照 knowledge.words 生成的，所以孩子点下去
+// 问的多半是名词解释。没网的时候如果还拿"任务一第 1 行还空着"去回他，就答非所问了。
+// 这里只回课本上的概念，并且过一遍 containsSecret：万一名词解释里带了某一格的标准答案，
+// 就宁可退回指路（宁可少说一句，也不能替他把答案说了）。
+function conceptReply({ lesson, question }) {
+  const k = (lesson && lesson.knowledge) || null;
+  if (!k || !Array.isArray(k.words)) return null;
+  const q = String(question == null ? '' : question);
+  const hit = k.words.find((w) => w && w.w && q.indexOf(w.w) >= 0);
+  if (!hit) return null;
+  const line = '**' + hit.w + '**：' + hit.d;
+  if (containsSecret(line, lesson)) return null;
+  return line;
+}
+
+// ---------------------------------------------------------------
 // 离线提示阶梯：不联网、不花钱，只用学生屏幕上已有的东西指路。
 // 这也是唯一"可证明安全"的一条回复路径——它只会复述公开字段里的原话。
 function localHint({ lesson, sheet, rows }) {
@@ -318,7 +342,7 @@ function localHint({ lesson, sheet, rows }) {
     // 孩子看到的每一行都得是"新的信息"，重复的话他读两遍就不想读了。
     out.push('你自己也能找到线索：**' + refOf(gap) + '**还空着。');
     if (gap.colLabel) out.push('要填的那一列是**「' + gap.colLabel + '」**。');
-    if (gap.intro) out.push('这一题开头的提示语是：「' + clip(gap.intro, 60) + '」');
+    if (gap.intro) out.push('这一题开头的提示语是：「' + firstSentence(gap.intro) + '」');
     if (gap.example) out.push('题目给的例子是：「' + clip(gap.example, 40) + '」，照它的样子想一想。');
     out.push('先自己想一句填上去，再回来跟我讲讲你为什么这么想 😊');
   } else {
@@ -331,7 +355,11 @@ function localHint({ lesson, sheet, rows }) {
 }
 
 function fallbackReply(opts) {
-  return '（离线回答）问问这会儿连不上网～\n' + localHint(opts) +
+  const c = conceptReply(opts);
+  return '（离线回答）问问这会儿连不上网～\n' +
+    (c
+      ? c + '\n\n这是课本上的道理，和任务单上要填的那一格不是一回事哦——那一格还得你自己想 😊'
+      : localHint(opts)) +
     '\n\n还是卡住的话，先问问身边的同学，过一会儿刷新页面再叫我。';
 }
 
@@ -395,6 +423,6 @@ module.exports = {
   config, reset, redact, dayStr,
   agentSheet, secretStrings,
   containsSecret, contextOf, sheetText, buildMessages,
-  localHint, fallbackReply, blockedReply, chat,
+  localHint, conceptReply, fallbackReply, blockedReply, chat,
   lessonName,
 };
