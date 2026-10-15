@@ -87,6 +87,9 @@ function compile(expr) { try { new Function('return (' + expr + ')'); return nul
     console.log('  📷 ' + file);
   };
   const waitFor = async (e, n, ms) => { for (let i = 0; i < (n || 30); i++) { if (await ev(e)) return true; await sleep(ms || 300); } return false; };
+  // ⚠ position:fixed 的元素 offsetParent 恒为 null，别用它判"看不看得见"——量一下盒子尺寸才算数
+  const visExpr = (sel) => `(function(){var n=document.querySelector(${JSON.stringify(sel)});if(!n)return false;var r=n.getBoundingClientRect();return r.width>1&&r.height>1;})()`;
+  const vis = (sel) => ev(visExpr(sel));
 
   // ---- 教师端：第 5 个页签 ----
   if (PART === 'all' || PART === 'teacher') {
@@ -195,6 +198,149 @@ function compile(expr) { try { new Function('return (' + expr + ')'); return nul
     ok(ov.doc <= ov.win + 2, '500px 窄屏不横向溢出（' + ov.doc + ' ≤ ' + ov.win + '）');
     await shot('#tabBody .card', '教师端-学生提问-500px.png');
     await send('Emulation.clearDeviceMetricsOverride');
+  }
+
+  // ---- 学生端：任务单页的悬浮按钮 + 面板 ----
+  if (PART === 'all' || PART === 'student') {
+    console.log('\n-- 学生端【问问】--');
+    await send('Page.navigate', { url: BASE + '/quiz' });
+    await sleep(600);
+    await waitFor(`document.readyState==='complete' && !!document.getElementById('loginName')`, 40, 300);
+    // 用刚建的那个学生登录（还没到收尾删除那一步）
+    await ev(`(function(){var n=document.getElementById('loginName');n.value=${JSON.stringify(S3)};n.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('loginGo').click();return 1})()`);
+    ok(await waitFor(`!document.getElementById('view-map').hidden`, 40, 300), '学生登录进课程地图');
+
+    // 课程地图上不该有问问
+    ok(!(await vis('#askShell .ask-fab')) && !(await vis('#askShell .ask-panel')), '课程地图页看不见问问');
+
+    // 进「第4课 数据的安全」的课内任务单
+    await waitFor(`document.querySelectorAll('#gradeTabs .tab').length>0`, 40, 300);
+    await ev(`(function(){var t=[].slice.call(document.querySelectorAll('#gradeTabs .tab')).filter(function(x){return x.textContent.trim()==='4年级'})[0];if(t)t.click();return 1})()`);
+    await waitFor(`[].slice.call(document.querySelectorAll('.lesson')).some(function(x){return x.textContent.indexOf('数据的安全')>=0})`, 30, 300);
+    const goSheet = await ev(`(function(){
+      var c=[].slice.call(document.querySelectorAll('.lesson')).filter(function(x){return x.textContent.indexOf('数据的安全')>=0})[0];
+      if(!c) return 'no lesson';
+      var b=[].slice.call(c.querySelectorAll('button')).filter(function(x){return x.textContent.indexOf('课内任务单')>=0})[0];
+      if(!b) return 'no btn'; b.click(); return 'ok';})()`);
+    const sheetUp = await waitFor(`!document.getElementById('view-sheet').hidden && !!document.querySelector('#sheetBody table.sheet-table')`, 40, 300);
+    ok(goSheet === 'ok' && sheetUp, '打开第4课的课内任务单（' + goSheet + '）');
+
+    // 悬浮按钮出现，且不压住「保存任务单」
+    ok(await waitFor(visExpr('#askShell .ask-fab'), 30, 300), '任务单页右下角出现「💬 问问」');
+    const geo = await ev(`(function(){
+      var f=document.querySelector('#askShell .ask-fab').getBoundingClientRect();
+      var b=document.getElementById('sheetSaveBtn').getBoundingClientRect();
+      var cross = !(f.right<b.left||f.left>b.right||f.bottom<b.top||f.top>b.bottom);
+      return {cross:cross, gap:Math.round(b.top-f.bottom), zf:getComputedStyle(document.querySelector('#askShell .ask-fab')).zIndex};})()`);
+    ok(geo && !geo.cross && geo.gap >= 4, '悬浮按钮没压住「保存任务单」（间隙 ' + (geo && geo.gap) + 'px）');
+    ok(geo && Number(geo.zf) < 60, '悬浮按钮层级低于 .toast 的 60（z-index ' + (geo && geo.zf) + '）');
+
+    // 点开面板
+    await ev(`(function(){document.querySelector('#askShell .ask-fab').click();return 1})()`);
+    ok(await waitFor(`!document.querySelector('#askShell .ask-panel').hidden`, 20, 200), '点一下打开面板');
+    const hd = await ev(`(function(){
+      var p=document.querySelector('#askShell .ask-panel');
+      return {left:(p.querySelector('.ask-left')||{}).textContent||'',
+              greet:(p.querySelector('.chat-msg.ai .chat-text')||{}).textContent||'',
+              tag:(p.querySelector('.chat-msg.ai .src-tag')||{}).textContent||'',
+              chips:[].slice.call(p.querySelectorAll('.ask-chip')).map(function(x){return x.textContent})};})()`);
+    ok(hd && hd.greet.indexOf('问问') >= 0 && hd.tag === '问问', '问候语气泡带「问问」标签（' + hd.tag + '）');
+    ok(hd && /今天还能问 \d+ 次/.test(hd.left), '头部显示「今天还能问 N 次」（' + hd.left + '）');
+    ok(hd && hd.chips.length >= 2, '有快捷问法 chips（' + JSON.stringify(hd.chips) + '）');
+    await shot('#askShell .ask-panel', '学生端-问问-刚打开.png');
+
+    // 点一个 chip 问一句
+    const l0 = Number((hd.left.match(/(\d+)/) || [])[1]);
+    await ev(`(function(){document.querySelector('#askShell .ask-chip').click();return 1})()`);
+    await waitFor(`document.querySelectorAll('#askShell .chat-msg.user').length===1 && !document.querySelector('#askShell .chat-msg.typing')`, 40, 300);
+    const a1 = await ev(`(function(){
+      var us=document.querySelectorAll('#askShell .chat-msg.user');
+      var ms=document.querySelectorAll('#askShell .chat-msg.ai');
+      var last=ms[ms.length-1];
+      return {q:us[0].textContent,
+              a:(last.querySelector('.chat-text')||{}).textContent||'',
+              tag:(last.querySelector('.src-tag')||{}).textContent||'',
+              left:(document.querySelector('#askShell .ask-left')||{}).textContent||''};})()`);
+    ok(a1 && a1.q.length > 2, 'chip 的问题渲染成我的气泡（' + a1.q + '）');
+    ok(a1 && a1.a.length > 20 && a1.tag === '离线回答', '离线路径：回答带「离线回答」标签（' + a1.tag + '）');
+    ok(a1 && a1.a.indexOf('任务') >= 0, '离线回答确实指到了任务单上的位置');
+    ok(a1 && Number((a1.left.match(/(\d+)/) || [])[1]) === l0 - 1, '「还能问 N 次」跟着响应减 1（' + l0 + '→' + (a1 && a1.left) + '）');
+    // 离线话术只复述屏幕上本来就有的话：不许出现任务单下拉里的候选答案
+    const picks = await ev(`(function(){
+      var out=[];
+      [].slice.call(document.querySelectorAll('#sheetBody select.sheet-pick')).forEach(function(s){
+        [].slice.call(s.options).forEach(function(o){ var t=o.textContent.trim(); if(t && t.length>3) out.push(t); });
+      });
+      return out.slice(0,40);})()`);
+    const leaked = (picks || []).filter((p) => (a1.a + a1.q).indexOf(p) >= 0);
+    ok(leaked.length === 0, '离线回答里没有冒出下拉里的候选答案（查了 ' + (picks || []).length + ' 条）' + (leaked.length ? '：' + leaked[0] : ''));
+    await shot('#askShell .ask-panel', '学生端-问问-问了一句.png');
+
+    // 打字发送
+    await ev(`(function(){var i=document.querySelector('#askShell .ask-input input');i.value='我还是不太懂，再具体一点';i.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 1})()`);
+    ok(await waitFor(`document.querySelectorAll('#askShell .chat-msg.user').length===2 && !document.querySelector('#askShell .chat-msg.typing')`, 40, 300), '打字回车也能问（第二次）');
+    const a2 = await ev(`(function(){var ms=document.querySelectorAll('#askShell .chat-msg.ai');return {n:ms.length, a:(ms[ms.length-1].querySelector('.chat-text')||{}).textContent||''}})()`);
+    ok(a2 && a2.n === 3 && a2.a.length > 20, '第二次追问也有回答（气泡 ' + (a2 && a2.n) + ' 个）');
+
+    // 收起 → 按钮回来
+    await ev(`(function(){document.querySelector('#askShell .ask-x').click();return 1})()`);
+    ok(await waitFor(`document.querySelector('#askShell .ask-panel').hidden && ${visExpr('#askShell .ask-fab')}`, 20, 200), '点 ✕ 收起来，悬浮按钮回来');
+
+    // ---- 500px 窄屏（把面板重新打开量一遍：投影/分屏上不能横向溢出、也不能顶出屏幕）----
+    await send('Emulation.setDeviceMetricsOverride', { width: 500, height: 900, deviceScaleFactor: 1, mobile: false });
+    await sleep(400);
+    const ov2 = await ev(`({doc:document.documentElement.scrollWidth,win:window.innerWidth})`);
+    ok(ov2.doc <= ov2.win + 2, '500px 窄屏任务单页不横向溢出（' + ov2.doc + ' ≤ ' + ov2.win + '）');
+    await ev(`(function(){var f=document.querySelector('#askShell .ask-fab');if(f&&f.getBoundingClientRect().width>1)f.click();return 1})()`);
+    await sleep(400);
+    const pb = await ev(`(function(){
+      var p=document.querySelector('#askShell .ask-panel');
+      if(!p||p.hidden) return null;
+      var r=p.getBoundingClientRect();
+      return {x:Math.round(r.x), right:Math.round(r.right), top:Math.round(r.top), bottom:Math.round(r.bottom), win:window.innerWidth, vh:window.innerHeight};})()`);
+    ok(pb && pb.x >= 0 && pb.right <= pb.win + 1, '500px 下面板不横向溢出（' + (pb && pb.x + '…' + pb.right) + ' / ' + (pb && pb.win) + '）');
+    ok(pb && pb.top >= 0 && pb.bottom <= pb.vh + 1, '500px 下面板不顶出屏幕（' + (pb && pb.top + '…' + pb.bottom) + ' / ' + (pb && pb.vh) + '）');
+    await shot('#askShell .ask-panel', '学生端-问问-500px.png');
+    await send('Emulation.clearDeviceMetricsOverride');
+    await sleep(300);
+    await ev(`(function(){document.querySelector('#askShell .ask-x').click();return 1})()`);
+
+    // ---- 回课程地图，再进同一课的任务单：聊过的还在（面板 DOM 挂在 #sheetBody 外面，没被重建）----
+    const back2 = await ev(`(function(){
+      var b=[].slice.call(document.querySelectorAll('#sheetHeader button')).filter(function(x){return x.textContent.indexOf('返回')>=0})[0];
+      if(!b) return 'no back'; b.click(); return 'ok';})()`);
+    if (back2 === 'ok') {
+      await waitFor(`!document.getElementById('view-map').hidden`, 30, 300);
+      await ev(`(function(){
+        var c=[].slice.call(document.querySelectorAll('.lesson')).filter(function(x){return x.textContent.indexOf('数据的安全')>=0})[0];
+        var b=[].slice.call(c.querySelectorAll('button')).filter(function(x){return x.textContent.indexOf('课内任务单')>=0})[0];
+        b.click(); return 1;})()`);
+      await waitFor(`!document.getElementById('view-sheet').hidden`, 30, 300);
+      await sleep(500);
+      const keep = await ev(`(function(){
+        var us=document.querySelectorAll('#askShell .chat-msg.user');
+        return {n:us.length, first:us.length?us[0].textContent:'', hidden:document.querySelector('#askShell .ask-panel').hidden};})()`);
+      ok(keep && keep.n === 2, '重新进任务单：之前聊过的还在，不用重问（' + (keep && keep.n) + ' 条我的提问）');
+      ok(keep && keep.first === '这一步该怎么想？', '第一条还是刚才那句（' + (keep && keep.first) + '）');
+      ok(keep && keep.hidden, '面板默认是收起的（悬浮按钮等着）');
+    } else console.log('  （没找到返回按钮，跳过"聊过的还在"这一条）');
+
+    // ---- 切到课后小测页 → 问问必须消失（小测是测评，AI 在旁边等于开卷）----
+    const toQuiz = await ev(`(function(){
+      var b=[].slice.call(document.querySelectorAll('#sheetHeader button')).filter(function(x){return x.textContent.indexOf('返回')>=0})[0];
+      if(b) b.click(); return 1})()`);
+    void toQuiz;
+    await waitFor(`!document.getElementById('view-map').hidden`, 30, 300);
+    await sleep(300);
+    const inQuiz = await ev(`(function(){
+      var c=[].slice.call(document.querySelectorAll('.lesson')).filter(function(x){return x.textContent.indexOf('数据的安全')>=0})[0];
+      if(!c) return 'no lesson';
+      var b=[].slice.call(c.querySelectorAll('button')).filter(function(x){return x.textContent.indexOf('课后小测')>=0})[0];
+      if(!b) return 'no btn'; b.click(); return 'ok';})()`);
+    if (inQuiz === 'ok') {
+      await waitFor(`!document.getElementById('view-quiz').hidden`, 30, 300);
+      ok(!(await vis('#askShell .ask-fab')) && !(await vis('#askShell .ask-panel')), '切到课后小测页，问问不见了');
+    } else console.log('  （没找到小测入口，跳过"小测页没有问问"这一条）');
   }
 
   ws.close(); kill(); await sleep(300);

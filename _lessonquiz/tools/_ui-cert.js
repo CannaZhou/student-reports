@@ -100,7 +100,15 @@ function mk(ws) {
   ok(wall.shown, '证书墙已渲染');
   ok(wall.done >= 1, '有 ' + wall.done + ' 张已发证卡');
   ok(wall.todo >= 1, '未完成的课也列在墙上（' + wall.todo + ' 张）');
-  ok(/已完成\s*1\s*\/\s*4\s*课/.test(wall.text), '墙头显示 已完成 1 / 4 课');
+  // 分母是这个单元的课数——六上第一单元从 4 课长到 5 课了，别再写死数字
+  const N_UNIT = (function () {
+    for (const g of CONTENT.grades || []) for (const u of g.units || []) {
+      if ((u.lessons || []).some((l) => l.id === LID)) return u.lessons.length;
+    }
+    return 0;
+  })();
+  ok(new RegExp('已完成\\s*1\\s*/\\s*' + N_UNIT + '\\s*课').test(wall.text),
+    '墙头显示 已完成 1 / ' + N_UNIT + ' 课（本单元 ' + N_UNIT + ' 课）');
   ok(wall.text.indexOf('还差：课后小测') >= 0, '未完成卡写明「还差：课后小测」');
   ok(wall.text.indexOf('任务单待老师批阅') >= 0, '待批阅有橙色提示');
   await shot('01-证书墙');

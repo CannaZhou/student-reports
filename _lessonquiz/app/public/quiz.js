@@ -59,7 +59,7 @@
 
   $('logoutBtn').addEventListener('click', async () => {
     try { await api('/api/student/logout', 'POST', {}); } catch (e) {}
-    ME = null; CATALOG = null; SHEET = null; DOMV.length = 0; applyMe(); show('login'); $('loginName').value = '';
+    ME = null; CATALOG = null; SHEET = null; DOMV.length = 0; askReset(); applyMe(); show('login'); $('loginName').value = '';
   });
 
   // 同名班级选择
@@ -392,6 +392,7 @@
       SHEET = j; // {lessonId,title,sheet,prev,lastAt}
       renderSheet();
       show('sheet');
+      askEnter(); // 【问问】进场（不 await：面板晚半拍出现没关系，别拖慢任务单）
     } catch (e) { toast(e.message); }
   }
 
@@ -794,6 +795,192 @@
     const scroll = el('div', 'tbl-scroll sheet-scroll');
     scroll.appendChild(table);
     return scroll;
+  }
+
+  // ================= 【问问】做任务单时可以随时提问 =================
+  // 面板挂在 #view-sheet 里面，所以"只在任务单页露面"是白送的（切走＝父级 hidden）。
+  // 分寸由服务端把着：答案根本不在模型拿到的材料里，模型自己猜到也会被换掉，
+  // 真离线时走本地提示阶梯（只复述屏幕上本来就有的字）。
+  const ASK = { lessonId: '', who: '', left: null, busy: false, built: false, msgs: [], chips: [] };
+  const ASK_TAG = { llm: '问问', local: '离线回答', limit: '今天问够啦' };
+  const ASK_OFFLINE = '问问这会儿连不上网～ 你先看看任务单上面的提示语，或者问问身边的同学，一会儿再叫我。';
+
+  function askBuild() {
+    const shell = $('askShell');
+    if (!shell || ASK.built) return;
+    ASK.built = true;
+
+    const fab = el('button', 'ask-fab', '💬 问问');
+    fab.onclick = () => askOpen(true);
+    shell.appendChild(fab);
+
+    const panel = el('div', 'ask-panel');
+    panel.hidden = true;
+    const head = el('div', 'ask-head');
+    head.appendChild(el('b', null, '💬 问问'));
+    const left = el('span', 'ask-left', '');
+    head.appendChild(left);
+    const x = el('button', 'ask-x', '✕');
+    x.title = '收起来（聊天还在）';
+    x.onclick = () => askOpen(false);
+    head.appendChild(x);
+    panel.appendChild(head);
+
+    const body = el('div', 'ask-body');
+    panel.appendChild(body);
+    const chips = el('div', 'ask-chips');
+    chips.hidden = true;
+    panel.appendChild(chips);
+
+    const row = el('div', 'ask-input');
+    const inp = el('input');
+    inp.placeholder = '卡在哪儿了？说给我听听…';
+    inp.autocomplete = 'off';
+    inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); askSend(inp.value); } };
+    const go = el('button', 'btn', '发送');
+    go.onclick = () => askSend(inp.value);
+    row.appendChild(inp); row.appendChild(go);
+    panel.appendChild(row);
+    shell.appendChild(panel);
+
+    ASK.dom = { panel, body, chips, inp, go, left };
+  }
+
+  function askOpen(on) {
+    const d = ASK.dom;
+    if (!d) return;
+    d.panel.hidden = !on;
+    const fab = document.querySelector('#askShell .ask-fab');
+    if (fab) fab.hidden = on;
+    if (on) {
+      d.body.scrollTop = d.body.scrollHeight;
+      try { d.inp.focus(); } catch (e) {}
+    }
+  }
+
+  // 纯文本 + 只认 **加粗**（这个项目零依赖，不引 markdown 库；也不碰 innerHTML 塞学生的话）
+  function askRc(text) {
+    const d = el('div', 'chat-text');
+    String(text == null ? '' : text).split('**').forEach((p, i) => {
+      if (i % 2 === 1) d.appendChild(el('b', null, p));
+      else d.appendChild(document.createTextNode(p));
+    });
+    return d;
+  }
+  function askBubble(role, text, tag) {
+    const d = ASK.dom;
+    const m = el('div', 'chat-msg ' + role);
+    m.appendChild(askRc(text));
+    if (tag) m.appendChild(el('span', 'src-tag', tag));
+    d.body.appendChild(m);
+    d.body.scrollTop = d.body.scrollHeight;
+    ASK.msgs.push({ role: role === 'user' ? 'user' : 'assistant', text: String(text == null ? '' : text) });
+    return m;
+  }
+  // "问问正在思考…"只是个占位，不进 ASK.msgs（它不是对话的一部分，也不该带进下一轮 history）
+  function askTyping() {
+    const m = el('div', 'chat-msg ai typing', '问问正在思考…');
+    ASK.dom.body.appendChild(m);
+    ASK.dom.body.scrollTop = ASK.dom.body.scrollHeight;
+    return m;
+  }
+  // 把占位气泡就地换成真回复（成功和失败走同一条路，免得 history 里留下"正在思考"）
+  function askFill(node, text, tag) {
+    node.classList.remove('typing');
+    node.innerHTML = '';
+    node.appendChild(askRc(text));
+    if (tag) node.appendChild(el('span', 'src-tag', tag));
+    ASK.msgs.push({ role: 'assistant', text: String(text == null ? '' : text) });
+    ASK.dom.body.scrollTop = ASK.dom.body.scrollHeight;
+  }
+  function askLeft() {
+    if (!ASK.dom) return;
+    ASK.dom.left.textContent = (ASK.left == null) ? '' : ('今天还能问 ' + ASK.left + ' 次');
+  }
+  function askChips(list) {
+    const d = ASK.dom;
+    if (!d) return;
+    ASK.chips = list || [];
+    d.chips.innerHTML = '';
+    d.chips.hidden = !ASK.chips.length;
+    ASK.chips.forEach((q) => {
+      const b = el('button', 'ask-chip', q);
+      b.onclick = () => askSend(q);
+      d.chips.appendChild(b);
+    });
+  }
+
+  // 进任务单页就叫一次：拿问候语、快捷问法、"今天还能问几次"（次数只信服务端，不自己算）
+  // 退出登录就把聊天清干净：同一台平板上下一个孩子不该看见上一个孩子的原话
+  function askReset() {
+    ASK.lessonId = ''; ASK.who = ''; ASK.msgs.length = 0;
+    if (ASK.dom) { ASK.dom.body.innerHTML = ''; askChips([]); askOpen(false); }
+    const shell = $('askShell');
+    if (shell) shell.hidden = true;
+  }
+
+  async function askEnter() {
+    if (!SHEET) return;
+    askBuild();
+    const shell = $('askShell');
+    if (!shell || !ASK.dom) return;
+    const lid = SHEET.lessonId;
+    const who = (ME && ME.uid) || '';
+    // 换了课、或者换了人（同一台平板上换了账号）都要从头开始——不能把上一个孩子的聊天留在屏幕上
+    const fresh = (ASK.lessonId !== lid || ASK.who !== who);
+    ASK.lessonId = lid; ASK.who = who;
+    if (fresh) {
+      ASK.msgs.length = 0;
+      ASK.dom.body.innerHTML = '';
+      askChips([]);
+      askOpen(false);
+    }
+    let j = null;
+    try { j = await api('/api/ask/hello?lessonId=' + encodeURIComponent(lid)); }
+    catch (e) { shell.hidden = true; return; }   // 拉不到问候语就先不露面，别给孩子一个空壳
+    shell.hidden = false;
+    ASK.left = (j.left === undefined ? null : j.left);
+    askLeft();
+    if (!fresh) { askChips(ASK.chips); return; }  // 同一课再进来：聊过的还在，不重来
+    let hist = [];
+    try { hist = (await api('/api/ask/history?lessonId=' + encodeURIComponent(lid))).items || []; } catch (e) {}
+    if (hist.length) {
+      hist.forEach((x) => askBubble(x.role === 'user' ? 'user' : 'ai', x.text, x.role === 'user' ? '' : '问问'));
+    } else {
+      askBubble('ai', j.greeting, '问问');
+    }
+    askChips(j.chips || []);
+  }
+
+  async function askSend(text) {
+    const d = ASK.dom;
+    if (!d || ASK.busy || !SHEET) return;
+    const q = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+    if (!q) return;
+    ASK.busy = true;
+    d.go.disabled = true;
+    d.inp.value = '';
+    askBubble('user', q, '');
+    const t = askTyping();
+    // 只带最近几轮；草稿是"我这样写对不对"的上下文（服务端还会再按白名单洗一遍，越界的 key 一律丢掉）
+    const history = ASK.msgs.slice(-12).map((x) => ({ role: x.role, text: x.text }));
+    let j = null;
+    try {
+      j = await api('/api/ask', 'POST', {
+        lessonId: SHEET.lessonId, question: q, draft: collectSheetRows(), history,
+      });
+    } catch (e) {
+      askFill(t, ASK_OFFLINE, '没连上');
+      askChips(ASK.chips.slice());
+      ASK.busy = false; d.go.disabled = false;
+      return;
+    }
+    askFill(t, j.reply, ASK_TAG[j.source] || '问问');
+    if (j.left !== undefined) { ASK.left = j.left; askLeft(); }
+    // 到量了就把快捷问法收起来，免得孩子对着点不动的按钮一直点
+    askChips(j.source === 'limit' ? [] : ASK.chips.slice());
+    d.body.scrollTop = d.body.scrollHeight;
+    ASK.busy = false; d.go.disabled = false;
   }
 
   function collectSheetRows() {

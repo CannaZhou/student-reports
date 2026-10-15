@@ -368,6 +368,63 @@ input.score-in { width: 62px; padding: 5px 4px; font-size: 14px; text-align: cen
 }
 .empty-note { text-align: center; color: var(--ink-2); padding: 26px 10px; font-size: 14px; }
 
+/* 任务单页的【问问】：右下角悬浮按钮 + 聊天面板。
+   位置要躲开两样东西：底部 sticky 的「保存任务单」条（.submit-bar，bottom:10px、约 60px 高）
+   和 .toast 的层级（z-index:60 —— 面板一旦压到它头上，全站的提示条就废了）。
+   面板高度用 calc(100vh - 170px) 兜底，矮窗口（比如投影/分屏）也不会顶出屏幕外面。 */
+.ask-fab {
+  position: fixed; right: 20px; bottom: 86px; z-index: 24;
+  display: flex; align-items: center; gap: 6px;
+  border: 0; border-radius: 26px; padding: 10px 16px; font-family: inherit;
+  background: var(--green); color: #fff; font-size: 15px; font-weight: 700;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18); cursor: pointer;
+}
+.ask-fab:hover { background: var(--green-dk); }
+.ask-fab:active { transform: translateY(1px); }
+.ask-panel {
+  position: fixed; right: 20px; bottom: 150px; z-index: 24;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 170px));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+.ask-head {
+  display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+  background: var(--green-bg); border-bottom: 1px solid var(--line); font-size: 14px;
+}
+.ask-head b { color: var(--green-dk); }
+.ask-left { margin-left: auto; font-size: 11.5px; color: var(--ink-2); }
+.ask-x { border: 0; background: transparent; font-size: 17px; line-height: 1;
+  color: var(--ink-2); cursor: pointer; padding: 2px 4px; }
+.ask-body {
+  flex: 1; overflow-y: auto; padding: 10px 12px; min-height: 110px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.chat-msg { max-width: 88%; padding: 8px 11px; border-radius: 12px; font-size: 14px; line-height: 1.55; }
+.chat-msg.ai { align-self: flex-start; background: var(--green-bg); border: 1px solid var(--line); }
+.chat-msg.user { align-self: flex-end; background: var(--green); color: #fff; }
+.chat-msg.typing { color: var(--ink-2); font-style: italic; }
+.chat-text { white-space: pre-wrap; word-break: break-word; }
+/* 回复是谁给的：问问（在线）/ 离线回答 / 今天问够啦 —— 孩子和老师都该看得出来 */
+.src-tag { display: block; margin-top: 4px; font-size: 10.5px; color: var(--ink-2); opacity: .9; }
+.ask-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 12px 0; }
+.ask-chip { border: 1px solid var(--line); background: #fff; color: var(--green-dk);
+  border-radius: 15px; padding: 5px 11px; font-size: 12.5px; font-family: inherit; cursor: pointer; }
+.ask-chip:hover { border-color: var(--green); background: var(--green-bg); }
+.ask-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+/* 输入框和发送键都按 48px 触控高度做（也免得 iOS 聚焦时自动放大页面） */
+.ask-input input { flex: 1; min-width: 0; min-height: 48px; box-sizing: border-box;
+  padding: 0 11px; font-size: 16px; font-family: inherit;
+  border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.ask-input .btn { min-height: 48px; }
+/* 窄屏（平板竖着、投影、分屏）：用 left+right 定位，不要用 100vw 算宽度——
+   100vw 把滚动条也算进去了，配上 right:20px 会让面板左边探出屏幕 7px（实测踩过）。 */
+@media (max-width: 560px) {
+  .ask-panel { left: 8px; right: 8px; width: auto; bottom: 146px; }
+  .ask-fab { right: 12px; }
+}
+
 /* 题目 */
 .qcard { margin-bottom: 16px; }
 .qhead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
