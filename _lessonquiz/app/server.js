@@ -7,6 +7,7 @@ const { hashPassword } = require('./core/passwd.js');
 const { createRouter } = require('./routes/router.js');
 const studentRoutes = require('./routes/student.js');
 const teacherRoutes = require('./routes/teacher.js');
+const agentRoutes = require('./routes/agent.js');
 const staticServe = require('./routes/static.js').serve;
 const { json } = require('./routes/helpers.js');
 
@@ -27,9 +28,14 @@ if (!store.teacher.passwordHash) {
 const hasLesson = store.allSemesters().some((g) => (g.units || []).some((u) => (u.lessons || []).length));
 if (!hasLesson) console.log('ℹ 尚无课程内容，请先运行：node tools/seed.js');
 
+// 【问问】自检：没配 key ＝离线模式，是正常的出厂状态，不报错只提示一句。
+// 走 redact() 打印，密钥永远不原样出现在控制台/日志里。
+console.log('ℹ 问问（课堂问答）：' + JSON.stringify(require('./core/agent.js').redact()));
+
 const router = createRouter();
 studentRoutes.register(router, { store, config: CONFIG });
 teacherRoutes.register(router, { store, config: CONFIG });
+agentRoutes.register(router, { store, config: CONFIG });   // 【问问】：/api/ask 等
 
 const server = http.createServer(async (req, res) => {
   try {

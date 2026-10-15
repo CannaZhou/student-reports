@@ -6,6 +6,7 @@ const sessions = require('../core/sessions.js');
 const { verifyPassword, hashPassword } = require('../core/passwd.js');
 const { lessonName, publicSheet } = require('../core/catalog.js');
 const { gradeSheet, taskTitles } = require('../core/sheetgrade.js'); // 任务单按任务判分（给老师端看学生错在哪）
+const agent = require('../core/agent.js'); // 【问问】：只看"配没配 key"，密钥不落任何响应
 const { sheetTaskCount } = require('../core/lesson.js'); // 任务单满分 = 这一课有几题（老师按"做对几题得几分"打）
 
 function isTeacher(sess) { return !!(sess && sess.role === 'teacher'); }
@@ -514,5 +515,60 @@ function register(router, { store, config }) {
       }
     });
     ok(res, {});
+  });
+
+  // ---- 【问问】老师看得见的那一份 ----
+  // 孩子问过什么，一眼看出全班卡在哪儿。按 uid 归并、只拿姓名显示：
+  // 同名的两个孩子是两条 uid（姓名｜班级），按姓名归并会把两个班的人并成一个。
+  router.add('GET', '/api/teacher/agent-log', (req, res, ctx, params, url) => {
+    if (!requireTeacher(req, res, config)) return;
+    const classes = classListOf(store);
+    let cls = String(url.searchParams.get('class') || '');
+    if (!cls || !classes.some((c) => c.name === cls)) cls = classes[0] ? classes[0].name : '';
+
+    const byLesson = {};
+    for (const s of store.rosterList()) {
+      if (!s.active || s.className !== cls) continue;
+      const p = store.progress[s.uid];
+      const asks = p && p.asks;
+      if (!asks) continue;
+      for (const lid of Object.keys(asks)) {
+        const arr = asks[lid] || [];
+        if (!arr.length) continue;
+        const e = byLesson[lid] || (byLesson[lid] = { askers: {}, total: 0, list: [] });
+        e.askers[s.uid] = 1;
+        e.total += arr.length;
+        for (const x of arr) e.list.push({ uid: s.uid, name: s.name, q: x.q, ts: x.ts, a: x.a || '' });
+      }
+    }
+    const items = Object.keys(byLesson).map((lid) => {
+      const e = byLesson[lid];
+      const l = store.findLesson(lid);
+      return {
+        lessonId: lid,
+        title: l ? lessonName(l) : lid,
+        askers: Object.keys(e.askers).length,
+        total: e.total,
+        list: e.list.sort((a, b) => String(b.ts).localeCompare(String(a.ts))).slice(0, 300),
+      };
+    }).sort((a, b) => b.total - a.total);
+
+    ok(res, {
+      classes, clsName: cls, items,
+      agentOff: !!store.teacher.agentOff,
+      agentOn: !!(agent.config().enabled && agent.config().apiKey),
+    });
+  });
+
+  // 老师课上"一键停/开"问问（存在 teacher.json 里，不新增文件）
+  router.add('POST', '/api/teacher/agent/toggle', async (req, res) => {
+    if (!requireTeacher(req, res, config)) return;
+    const body = await readBody(req, config.maxBodyMB * 1024 * 1024);
+    const off = !!body.off;
+    await store.mutate(() => {
+      store.teacher.agentOff = off;
+      store.saveTeacher();
+    });
+    ok(res, { agentOff: off });
   });
 }

@@ -31,6 +31,11 @@ class Store {
     // 教师口令
     this.teacher = readJSON(this.file('teacher.json'), { version: 1, passwordHash: null });
 
+    // 【问问】全校当天提问计数：{ day:'2026-10-16', n: 12 }
+    // 为什么不塞进 progress/：那样要遍历八百多份进度文件求和，这只需要一个计数器。
+    // 这是内存里唯一个「重启会忘」的计数——每人配额存在各自的进度文件里，重启不丢（有意的）。
+    this.agentUsage = readJSON(this.file('agent-usage.json'), { day: '', n: 0 });
+
     // 成绩：key=uid
     this.progress = {};
     for (const f of fs.readdirSync(this.progressDir)) {
@@ -69,9 +74,29 @@ class Store {
     this.writeAtomic(p, this.progress[uid]);
     fs.copyFileSync(p, p + '.bak');
   }
+  saveAgentUsage() { this.writeAtomic(this.file('agent-usage.json'), this.agentUsage); }
   deleteProgress(uid) {
-    try { fs.unlinkSync(this.progressFile(uid)); } catch (e) {}
+    const p = this.progressFile(uid);
+    try { fs.unlinkSync(p); } catch (e) {}
+    // .bak 也要一起删：以前留着只是不整洁；现在进度文件里装着孩子问过的话，
+    // 留着就变成「老师删了这个学生的数据，原话还躺在盘上」。
+    try { fs.unlinkSync(p + '.bak'); } catch (e) {}
     delete this.progress[uid];
+  }
+
+  // 「从没交过任何东西」的学生没有进度记录 —— 恰恰是最需要问问的那批人。
+  // 照 student.js 交卷/交任务单时的样子把记录补齐；调用方接着改字段、再 saveProgress。
+  ensureProgress(stu) {
+    let p = this.progress[stu.uid];
+    if (!p) {
+      p = {
+        uid: stu.uid, name: stu.name, className: stu.className,
+        createdAt: new Date().toISOString(), lessons: {},
+      };
+      this.progress[stu.uid] = p;
+    }
+    p.name = stu.name; p.className = stu.className;
+    return p;
   }
 
   // ---------- 名单 ----------
@@ -153,6 +178,26 @@ class Store {
       out[no] = !!t[k];
     });
     return Object.keys(out).length ? out : null;
+  }
+
+  // ---------- 【问问】的配额与问答记录 ----------
+  // 某生「今天问了几次」：{day, n}；老文件没这个键 → null（零迁移）
+  askStat(uid) {
+    const p = this.progress[uid];
+    return (p && p.ask) || null;
+  }
+  // 某生某课的问答记录：[{q, a, ts}]；没有 → []
+  askLog(uid, lessonId) {
+    const p = this.progress[uid];
+    const m = p && p.asks;
+    return (m && m[lessonId]) || [];
+  }
+  // 全校当天已用次数（跨天自动归零）
+  usageToday(day) {
+    if (!this.agentUsage || this.agentUsage.day !== day) {
+      this.agentUsage = { day, n: 0 };
+    }
+    return this.agentUsage.n || 0;
   }
 }
 

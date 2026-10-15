@@ -1,0 +1,8 @@
+{
+  "_说明": "把本文件复制成同目录下的 agent.config.json，填上真实 apiKey 即可。agent.config.json 不入库（.gitignore）。",
+  "_换模型": "model / baseUrl 可以在这里覆盖，也可以不写（默认走 app/config.js 里的 agent 块）。",
+  "apiKey": "sk-在这里填 DeepSeek 的 API Key",
+  "model": "deepseek-chat",
+  "baseUrl": "https://api.deepseek.com",
+  "enabled": true
+}

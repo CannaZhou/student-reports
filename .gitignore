@@ -10,6 +10,9 @@ _ai_quiz/app/llm.config.json
 # 课堂检测系统：名单/成绩/会话密钥不入库
 _lessonquiz/app/data/
 
+# 课堂检测系统【问问】：大模型密钥只放本机（模板见 agent.config.example.json）
+_lessonquiz/app/agent.config.json
+
 # 看门狗运行痕迹（日志、上次启动时间）
 _lessonquiz/.watchdog_laststart
 _lessonquiz/tunnel_recent.err

@@ -258,4 +258,132 @@ function taskTitles(sheet) {
   return nos.map((no) => ({ no, title: taskTitle(sheet, no, units) }));
 }
 
-module.exports = { gradeSheet, studentView, walkRows, taskTitles };
+// =====================================================================
+// 以下四个函数是给【问问】（课堂问答智能体）用的，都围绕同一条底线：
+//   **答案不进 prompt**。模型没法泄漏它没拿到的东西，比任何提示词工程都管用。
+// 所以「哪些字符串算答案」这件事只能由这个模块说了算——它本来就知道全部答案。
+// =====================================================================
+
+// 这一课任务单的「全部标准答案串」：每个板块 keys 里每一格的值（字符串/字符串数组）。
+// matchBy 板块的外层键（学生自己选的那个程序名）不算答案——那一列本来就看得见；
+// 真正的答案是里层每一格（功能/体会）的值。
+// ⚠️ 只收集任务单的答案；课后小测的答案是另一张卷子，问问根本看不到小测，也不可能泄漏它。
+function answerStrings(lesson) {
+  const out = [];
+  const push = (v) => {
+    if (v == null) return;
+    if (Array.isArray(v)) { v.forEach(push); return; }
+    const s = String(v).trim();
+    if (s) out.push(s);
+  };
+  const sheet = lesson && lesson.sheet;
+  const blocks = (sheet && Array.isArray(sheet.sections) && sheet.sections.length) ? sheet.sections : [sheet];
+  for (const b of blocks) {
+    if (!b || !b.keys) continue;
+    for (const k of Object.keys(b.keys)) {
+      const o = b.keys[k];
+      if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach((c) => push(o[c]));
+      else push(o);
+    }
+  }
+  return [...new Set(out)];
+}
+
+// 学生本来就看得到的文本（publicSheet 里的每一串）。
+// 用处：答案里有一部分（下拉候选词、流程空位的候选词）学生屏幕上就有，
+// 拿它当「泄漏」判会满屏误报；真正要守的是「学生看不见的那些答案」。
+function visibleStrings(sheet) {
+  const out = [];
+  const walk = (v) => {
+    if (v == null) return;
+    if (typeof v === 'string') { out.push(v); return; }
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (typeof v === 'object') Object.keys(v).forEach((k) => walk(v[k]));
+  };
+  const blocks = (sheet && Array.isArray(sheet.sections) && sheet.sections.length) ? sheet.sections : [sheet];
+  walk(blocks);
+  return [...new Set(out)];
+}
+
+// 答案里哪些**没出现在给定的这份任务单文本里**——「哪些字已经露出来了」由调用方决定。
+// ⚠️ 给【问问】算的时候传的必须是 agentSheet（已经把下拉候选词摘掉的那一版），
+//    否则恒为空集：这个学校的任务单大半是"从下拉里选一条"，答案本身就是候选词。
+function secretStringsIn(sheet, lesson) {
+  const vis = {};
+  visibleStrings(sheet).forEach((s) => { vis[normalizeText(s)] = true; });
+  return answerStrings(lesson).filter((a) => {
+    const n = normalizeText(a);
+    return n && !vis[n];
+  });
+}
+
+// 学生草稿清洗：只留「这一行本来就能填的 key」，每格截 40 字，总格数封顶 40。
+// 用途是让问问贴着他自己的思路提问（「你是拿总头数去减吗？」），**不是拿它判对错**——
+// 所以这里只做白名单 + 截断，客户端塞进来的越界键一律丢掉。
+const DRAFT_CELL = 40;
+const DRAFT_MAX = 40;
+function cleanRows(sheet, rows) {
+  const units = walkRows(sheet);   // 与 catalog.sheetRowSpecs 同一套走法，行号 _i 完全一致
+  const out = [];
+  let cells = 0;
+  for (const r of (rows || [])) {
+    if (!r || typeof r !== 'object' || !Number.isInteger(r._i)) continue;
+    const u = units[r._i];
+    if (!u) continue;
+    const o = { _i: r._i };
+    for (const c of u.cols) {
+      if (cells >= DRAFT_MAX) break;
+      const v = String(r[c.key] == null ? '' : r[c.key]).replace(/\s+/g, ' ').trim().slice(0, DRAFT_CELL);
+      if (!v) continue;
+      o[c.key] = v; cells++;
+    }
+    if (Object.keys(o).length > 1) out.push(o);
+  }
+  return out;
+}
+
+// 逐行索引：数组下标 _i → {taskNo, taskTitle, rowNo, rowTotal, leftLabel, cols}。
+// 「任务二第 3 行」这种说法就靠它翻译出来——学生屏幕上的行号正是这个顺序。
+// 只读公开字段（cols/rows/rowLabels/flow.blanks），所以它复述的全是学生屏幕上已有的东西。
+function rowIndex(sheet) {
+  const units = walkRows(sheet || {});
+  units.forEach((u) => { u.no = taskNoOf(u.block, u.bi, u); });
+  return units.map((u) => {
+    const mine = units.filter((x) => x.bi === u.bi);
+    const b = u.block || {};
+    return {
+      taskNo: u.no,
+      taskTitle: taskTitle(sheet, u.no, units),
+      flow: !!u.flow,
+      rowNo: u.flow ? 0 : (mine.findIndex((x) => x.i === u.i) + 1),
+      rowTotal: u.flow ? 0 : mine.length,
+      leftLabel: (b.rowLabels || [])[u.ri] || '',
+      hasImage: !!(b.rowImages || [])[u.ri],
+      cols: u.cols.map((c) => ({ key: c.key, label: c.label || '' })),
+      heading: String(b.heading || b.caption || '').trim(),
+      intro: String(b.intro || '').trim(),
+      example: String(b.example || '').trim(),
+    };
+  });
+}
+
+// 「他第一个还空着的格子在哪儿」——离线提示阶梯就靠它指路（不用大模型，一点不花钱）。
+function firstGap(sheet, rows) {
+  const byRow = {};
+  (rows || []).forEach((r) => { if (r && Number.isInteger(r._i)) byRow[r._i] = r; });
+  const idx = rowIndex(sheet);
+  const units = walkRows(sheet || {});
+  for (let k = 0; k < units.length; k++) {
+    const u = units[k], meta = idx[k];
+    const row = byRow[u.i] || null;
+    const empty = fillableCols(u).filter((c) => !String(row ? (row[c.key] || '') : '').trim());
+    if (!empty.length) continue;
+    return Object.assign({}, meta, { i: u.i, colLabel: empty[0].label || '' });
+  }
+  return null;   // 所有格子都填了
+}
+
+module.exports = {
+  gradeSheet, studentView, walkRows, taskTitles,
+  answerStrings, visibleStrings, secretStringsIn, cleanRows, firstGap, rowIndex,
+};

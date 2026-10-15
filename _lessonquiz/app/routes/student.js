@@ -51,7 +51,7 @@ function classMateStatus(store, stu, lessonId) {
   };
 }
 
-module.exports = { register };
+module.exports = { register, studentOf, autoOf };
 
 function register(router, { store, config }) {
   // 登录：学生选自己的名字（无密码）。重名时需带班级。
