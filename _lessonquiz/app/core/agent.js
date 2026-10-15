@@ -314,10 +314,10 @@ function localHint({ lesson, sheet, rows }) {
   const gap = firstGap(s, rows || []);
   const out = [];
   if (gap) {
+    // refOf 里已经带了任务名和行首标签，所以这里不要再复述 heading / leftLabel ——
+    // 孩子看到的每一行都得是"新的信息"，重复的话他读两遍就不想读了。
     out.push('你自己也能找到线索：**' + refOf(gap) + '**还空着。');
-    if (gap.heading) out.push('它属于「' + clip(gap.heading, 40) + '」。');
-    if (gap.leftLabel) out.push('这一行左边写着**「' + gap.leftLabel + '」**，先想它会牵扯到什么。');
-    else if (gap.colLabel) out.push('要填的那一列是**「' + gap.colLabel + '」**。');
+    if (gap.colLabel) out.push('要填的那一列是**「' + gap.colLabel + '」**。');
     if (gap.intro) out.push('这一题开头的提示语是：「' + clip(gap.intro, 60) + '」');
     if (gap.example) out.push('题目给的例子是：「' + clip(gap.example, 40) + '」，照它的样子想一想。');
     out.push('先自己想一句填上去，再回来跟我讲讲你为什么这么想 😊');

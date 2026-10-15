@@ -336,6 +336,29 @@ input.score-in { width: 62px; padding: 5px 4px; font-size: 14px; text-align: cen
 .sum-table th.cnt { white-space: nowrap; text-align: center; }
 .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tbl-scroll table { min-width: 560px; }
+/* 教师端「学生提问」页签：一课一行，点开看那一课的问题清单（按人归并，新的在上） */
+.qa-table { min-width: 520px; }
+.qa-note { margin: 6px 2px 0; }
+.qa-table th.cnt { text-align: center; }
+.tbl tr.qa-row { cursor: pointer; }
+.tbl tr.qa-row:hover td { background: var(--green-bg); }
+.tbl tr.qa-row.on td { background: var(--green-lt); font-weight: 600; }
+.tbl tr.qa-detail > td { background: #fbfdfa; padding: 10px 12px; }
+.qa-list { display: grid; gap: 12px; }
+.qa-stu { border-left: 3px solid var(--green); padding-left: 10px; }
+.qa-name { font-size: 14px; color: var(--green-dk); margin-bottom: 4px; }
+.qa-name small { color: var(--ink-2); font-weight: 400; }
+.qa-item { padding: 6px 0; border-top: 1px dashed var(--line); }
+.qa-item:first-of-type { border-top: 0; }
+.qa-q { font-size: 14px; line-height: 1.5; }
+.qa-meta { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.qa-a { margin-top: 4px; font-size: 12.5px; }
+.qa-a > summary { cursor: pointer; color: var(--ink-2); list-style: none; display: inline-block; }
+.qa-a > summary::-webkit-details-marker { display: none; }
+.qa-a > summary::before { content: '▸ '; }
+.qa-a[open] > summary::before { content: '▾ '; }
+.qa-a-body { margin-top: 5px; padding: 7px 9px; background: var(--green-bg); border-radius: 8px;
+  color: var(--ink-2); line-height: 1.6; white-space: pre-wrap; }
 @media print {
   .topbar, .topbar * { display: none !important; }
   #login, .card > .tabs { display: none !important; }

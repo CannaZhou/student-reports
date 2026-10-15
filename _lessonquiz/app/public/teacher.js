@@ -55,6 +55,7 @@
     if (cur === 'roster') renderRoster();
     else if (cur === 'overview') renderOverview();
     else if (cur === 'summary') renderSummary();
+    else if (cur === 'ask') renderAskLog();
     else renderPassword();
   }
 
@@ -828,6 +829,130 @@
     pr.style.padding = '4px 12px'; pr.onclick = () => window.print();
     tools.appendChild(byName); tools.appendChild(byTotal); tools.appendChild(pr);
     card.appendChild(tools);
+    body.appendChild(card);
+  }
+
+  // ---------- 学生提问（问问的问答记录） ----------
+  function fmtAskTs(ts) {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return String(ts || '');
+    const p = (n) => (n < 10 ? '0' + n : String(n));
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  // 一课的问题清单：按 uid 归并到人，新的在上。
+  // ⚠ 必须按 uid：同名的两个学生是两条 uid（姓名｜班级），按姓名归并会把两个班的孩子并成一个人。
+  function askList(list) {
+    const box = el('div', 'qa-list');
+    const order = []; const byUid = {};
+    list.forEach((x) => {
+      let g = byUid[x.uid];
+      if (!g) { g = byUid[x.uid] = { name: x.name, items: [] }; order.push(x.uid); }
+      g.items.push(x);
+    });
+    order.forEach((uid) => {
+      const g = byUid[uid];
+      const stu = el('div', 'qa-stu');
+      const nm = el('div', 'qa-name');
+      nm.appendChild(el('b', null, g.name));
+      nm.appendChild(el('small', null, ' · ' + g.items.length + ' 条'));
+      stu.appendChild(nm);
+      g.items.forEach((x) => {
+        const item = el('div', 'qa-item');
+        item.appendChild(el('div', 'qa-q', x.q));
+        if (x.a) {
+          const d = el('details', 'qa-a');
+          d.appendChild(el('summary', null, '看看问问怎么答的'));
+          d.appendChild(el('div', 'qa-a-body', x.a));
+          item.appendChild(d);
+        }
+        item.appendChild(el('div', 'qa-meta', fmtAskTs(x.ts)));
+        stu.appendChild(item);
+      });
+      box.appendChild(stu);
+    });
+    return box;
+  }
+
+  async function renderAskLog(clsName) {
+    const body = $('tabBody'); body.innerHTML = '<div class="empty-note">加载中…</div>';
+    let j = null;
+    try { j = await api('/api/teacher/agent-log' + (clsName ? '?class=' + encodeURIComponent(clsName) : '')); }
+    catch (e) { toast(e.message); return; }
+    body.innerHTML = '';
+    const card = el('div', 'card');
+
+    const row = el('div', 'row-flex');
+    row.appendChild(el('b', null, '💬 学生提问 · ' + j.clsName));
+    row.appendChild(el('span', 'muted', '　问问的问答记录（只留在本机）'));
+    const sp = el('span'); sp.style.flex = '1'; row.appendChild(sp);
+    const sw = el('button', 'btn' + (j.agentOff ? '' : ' ghost'), j.agentOff ? '▶ 打开问问' : '⏸ 暂停问问');
+    sw.style.padding = '4px 12px';
+    sw.title = j.agentOff ? '让学生可以重新提问' : '这一节课暂时不让学生提问（已有的记录不删）';
+    sw.onclick = async () => {
+      const off = !j.agentOff;
+      sw.disabled = true;
+      try { await api('/api/teacher/agent/toggle', 'POST', { off }); }
+      catch (e) { sw.disabled = false; toast(e.message); return; }
+      toast(off ? '问问已暂停' : '问问已打开');
+      renderAskLog(j.clsName);
+    };
+    row.appendChild(sw);
+    card.appendChild(row);
+
+    card.appendChild(el('div', 'qa-note muted', j.agentOff
+      ? '问问现在是暂停的：学生打开面板只会看到「老师暂时关掉了」，问不出新问题。'
+      : (j.agentOn
+        ? '问问开着。同一类问题出现得多，说明这一处全班都卡。'
+        : '还没放密钥：问问现在只能离线指路——它会告诉学生「哪一行还空着、该看哪句提示语」，不花钱，也不会替他说出答案。')));
+
+    const chipsBar = el('div');
+    classChips(chipsBar, j.classes, j.clsName, (c) => renderAskLog(c));
+    card.appendChild(chipsBar);
+
+    if (!j.items.length) {
+      card.appendChild(el('div', 'empty-note', j.agentOff ? '问问是暂停状态。' : '这个班还没有学生提问。'));
+      body.appendChild(card); return;
+    }
+
+    let nAsk = 0, nQ = 0;
+    j.items.forEach((x) => { nAsk += x.askers; nQ += x.total; });
+
+    const scroll = el('div', 'tbl-scroll');
+    const table = el('table', 'tbl qa-table');
+    const thead = el('thead');
+    const htr = el('tr');
+    htr.appendChild(el('th', null, '课'));
+    htr.appendChild(el('th', 'cnt', '提问人数'));
+    htr.appendChild(el('th', 'cnt', '提问条数'));
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    const tbody = el('tbody');
+    j.items.forEach((it) => {
+      const tr = el('tr', 'qa-row');
+      tr.appendChild(el('td', null, it.title));
+      tr.appendChild(el('td', 'cnt', String(it.askers)));
+      tr.appendChild(el('td', 'cnt', String(it.total)));
+      const det = el('tr', 'qa-detail');
+      det.hidden = true;
+      const td = el('td'); td.colSpan = 3;
+      det.appendChild(td);
+      let built = false;
+      tr.onclick = () => {
+        if (!built) { td.appendChild(askList(it.list)); built = true; }
+        det.hidden = !det.hidden;
+        tr.classList.toggle('on', !det.hidden);
+      };
+      tbody.appendChild(tr); tbody.appendChild(det);
+    });
+    table.appendChild(tbody);
+    scroll.appendChild(table);
+    card.appendChild(scroll);
+
+    const foot = el('div', 'qa-foot muted');
+    foot.textContent = '本班共 ' + nAsk + ' 人次提问 · ' + nQ + ' 条　（点一行展开那一课的清单；这些原话只存在本机，随学生数据一起删除）';
+    card.appendChild(foot);
     body.appendChild(card);
   }
 
