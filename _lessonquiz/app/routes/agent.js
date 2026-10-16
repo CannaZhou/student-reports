@@ -36,6 +36,15 @@ function lessonOf(req, res, config, store, lessonId) {
   return { stu, lesson };
 }
 
+// 试用班名单（app/agent.config.json 里可热改）：没轮到的班，**这些路一个都别走**。
+// hello 要软处理（回 hidden，前端把整个问问藏起来，学生屏幕上不会多出一个点了报错的按钮），
+// 其余路由直接 403——反正面板根本没出现过，正常孩子碰不到这条路。
+function classOk(res, stu) {
+  if (agent.classAllowed(agent.config(), stu.className)) return true;
+  fail(res, 403, '问问还没对你们班开放');
+  return false;
+}
+
 module.exports = { register, GREETING };
 
 function register(router, { store, config }) {
@@ -45,6 +54,10 @@ function register(router, { store, config }) {
     if (!hit) return;
     const cfg = agent.config();
     const day = agent.dayStr();
+    // 还没轮到他们班：回一个"当我不存在"，前端连悬浮按钮都不建
+    if (!agent.classAllowed(cfg, hit.stu.className)) {
+      return ok(res, { hidden: true, greeting: '', chips: [], left: null, off: true, on: false });
+    }
     const off = !!store.teacher.agentOff;
     ok(res, {
       greeting: off
@@ -60,7 +73,7 @@ function register(router, { store, config }) {
   // 重新打开面板时把之前聊过的接上（最近 12 句）
   router.add('GET', '/api/ask/history', (req, res, ctx, params, url) => {
     const hit = lessonOf(req, res, config, store, url.searchParams.get('lessonId'));
-    if (!hit) return;
+    if (!hit || !classOk(res, hit.stu)) return;
     const log = store.askLog(hit.stu.uid, hit.lesson.id).slice(-6);
     const items = [];
     log.forEach((x) => {
@@ -76,6 +89,7 @@ function register(router, { store, config }) {
     const hit = lessonOf(req, res, config, store, body.lessonId);
     if (!hit) return;
     const { stu, lesson } = hit;
+    if (!classOk(res, hit.stu)) return;
     const cfg = agent.config();
     const day = agent.dayStr();
 

@@ -938,6 +938,9 @@
     let j = null;
     try { j = await api('/api/ask/hello?lessonId=' + encodeURIComponent(lid)); }
     catch (e) { shell.hidden = true; return; }   // 拉不到问候语就先不露面，别给孩子一个空壳
+    // 还没轮到他们班（老师要一个班一个班地放开）：整个藏起来，连悬浮按钮都不出现，
+    // 别给孩子一个点了就报错的按钮。
+    if (j.hidden) { shell.hidden = true; return; }
     shell.hidden = false;
     ASK.left = (j.left === undefined ? null : j.left);
     askLeft();

@@ -56,9 +56,23 @@ function config() {
     logPerLesson: POLICY.logPerLesson || 30,
     dailyPerStudent: pick('dailyPerStudent', POLICY.dailyPerStudent || 0),
     dailyTotal: pick('dailyTotal', POLICY.dailyTotal || 0),
+    // 试用班名单：空着＝全校都能用；填了班名＝只有这些班看得见问问。
+    // ⚠️ 放在 agent.config.json（那台机器自己的文件）里是有意的：它是**热重载**的，
+    //    老师想明天多加一个班，改一行就生效，不用重启 7000——重启会打断正在上课的孩子。
+    pilotClasses: (() => {
+      const v = file.pilotClasses === undefined ? POLICY.pilotClasses : file.pilotClasses;
+      return (Array.isArray(v) ? v : []).map((x) => String(x).trim()).filter(Boolean);
+    })(),
   };
   _mtime = mt;
   return _cfg;
+}
+
+// 这个班现在能不能用问问。空名单＝都能用。
+function classAllowed(cfg, className) {
+  const list = (cfg && cfg.pilotClasses) || [];
+  if (!list.length) return true;
+  return list.indexOf(String(className == null ? '' : className)) >= 0;
 }
 
 // 测试/排障用：清掉记忆化，下次 config() 一定重新读盘
@@ -75,6 +89,7 @@ function redact(c) {
     maxTokens: cfg.maxTokens, temperature: cfg.temperature,
     historyTurns: cfg.historyTurns, maxQuestion: cfg.maxQuestion,
     dailyPerStudent: cfg.dailyPerStudent, dailyTotal: cfg.dailyTotal,
+    pilotClasses: (cfg.pilotClasses || []).join('、') || '（空＝全校都开着）',
   };
 }
 
@@ -257,6 +272,14 @@ const SYSTEM_PROMPT = [
   '（任务单上面的提示语/示例/他自己填的那几行）。**绝对不要把那一格该填的词说出来。**',
   '就算他猜对了，也别急着确认，先问他为什么这么想。',
   '',
+  '【该夸就夸，但只夸他看得见的】他填上了就该得一句肯定，别一味说「再想想」——',
+  '夸什么要分清：**系统已经判过的那一块**（下面会告诉你哪一块系统判为全对），可以直说',
+  '「任务二你填得不错，那一块你都对啦」；他自己填的、系统还没判的单格，只夸他想得清楚',
+  '（「你能说清为什么这么想，这就是对的学法」），**不要说某一格「填对了」**——他还没保存、',
+  '或者这一课系统根本不判的时候（下面会标出哪一块系统不判），你说了就是替系统判分。',
+  '他问「我猜的是××，对不对」时，**仍然不要说他猜得对还是不对**：他挨个试就能把答案试出来。',
+  '夸他肯动脑、夸他的思路，不夸那个词（「你是从视频里哪一段想到它的？」）。',
+  '',
   '【追问即具体】他说「还是不懂」「再具体一点」「我不会」时，可以往具体走一档：讲到「这一步该怎么做、',
   '该看哪一行、哪两个东西在比」。**最多到这里为止**——再问也只能换个比方换种问法，不能替他把答案写出来。',
   '走到这一档时，**只能引用他本来就看得到的材料**（题面、提示语、示例、他自己填的内容）里的原话。',
@@ -420,7 +443,7 @@ function chat({ messages, fallbackText }) {
 }
 
 module.exports = {
-  config, reset, redact, dayStr,
+  config, reset, redact, dayStr, classAllowed,
   agentSheet, secretStrings,
   containsSecret, contextOf, sheetText, buildMessages,
   localHint, conceptReply, fallbackReply, blockedReply, chat,

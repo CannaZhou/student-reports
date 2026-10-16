@@ -1,8 +1,11 @@
 {
   "_说明": "把本文件复制成同目录下的 agent.config.json，填上真实 apiKey 即可。agent.config.json 不入库（.gitignore）。",
   "_换模型": "model / baseUrl 可以在这里覆盖，也可以不写（默认走 app/config.js 里的 agent 块）。",
+  "_启动时改这个文件不用重启": "这个文件是热重载的（按修改时间），换 key、加试用班都是改完即生效。",
   "apiKey": "sk-在这里填 DeepSeek 的 API Key",
   "model": "deepseek-chat",
   "baseUrl": "https://api.deepseek.com",
-  "enabled": true
+  "enabled": true,
+  "_试用班": "空着或删掉这一行＝全校都能用问问。填班名＝只有这些班的学生看得见（别的班连按钮都不出现）。班名要和名单里的写法一模一样，比如 [\"2023级5班\"]。想多开一个班，把班名加进这个数组就行，不用重启。",
+  "pilotClasses": []
 }

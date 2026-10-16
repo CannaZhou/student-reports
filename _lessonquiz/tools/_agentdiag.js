@@ -87,6 +87,11 @@ function withConfig(obj, fn) {
     ['只聊这一课', '把无关话题/忽略指令挡回去'],
     ['道别就不追问', '道别就不追问'],
     ['不要因此直接说出那一格该填的词', '知道了错处也不许说出来'],
+    // 老师 2026-10-16 加的：该夸就夸，但只能夸他屏幕上看得见的
+    ['该夸就夸', '该夸就夸（别一味说"再想想"）'],
+    ['系统已经判过的那一块', '夸只夸系统已经判给他看的那一块'],
+    ['不要说某一格「填对了」', '不许按单格说"填对了"'],
+    ['仍然不要说他猜得对还是不对', '他挨个试就能把答案试出来 → 猜的不认'],
   ].forEach(([needle, label]) => ok(sys.indexOf(needle) >= 0, 'system 里有护栏句：' + label));
 
   // ---------------------------------------------------------------
@@ -412,6 +417,12 @@ function withConfig(obj, fn) {
   const cfg = agent.config();
   ok(cfg.maxTokens <= 600 && cfg.temperature <= 0.6, '答得短、温度低（max_tokens=' + cfg.maxTokens + ', T=' + cfg.temperature + '）');
   ok(cfg.dailyPerStudent > 0 && cfg.dailyTotal > 0, '两道配额闸都开着（' + cfg.dailyPerStudent + '/人·天，' + cfg.dailyTotal + '/天）');
+
+  // 试用班名单：老师要一个班一个班地放开（2026-10-16 先给 2023级5班）
+  ok(agent.classAllowed({ pilotClasses: [] }, '随便哪个班') === true, '名单空着＝全校都能用');
+  ok(agent.classAllowed({ pilotClasses: ['2023级5班'] }, '2023级5班') === true, '名单里的班能用（2023级5班）');
+  ok(agent.classAllowed({ pilotClasses: ['2023级5班'] }, '2023级4班') === false, '没轮到的班不能用（2023级4班）');
+  ok(agent.classAllowed({ pilotClasses: ['2023级5班'] }, '') === false, '没班级也当没轮到（不默认放行）');
 
   console.log('\n==== ' + pass + '/' + (pass + fail) + ' ====');
   if (fail) console.log('✗ 有 ' + fail + ' 条没过 —— 别动界面，先把后端修好');

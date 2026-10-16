@@ -8,6 +8,9 @@ const os = require('os'), path = require('path'), fs = require('fs');
 
 const BASE = process.env.BASE || 'http://127.0.0.1:7099';
 const PART = process.env.PART || 'all';
+// PART=pilot 要往隔离实例的 agent.config.json 里塞试用班名单（不放 key），所以要拿到那份 app 目录
+const APP = path.resolve(process.env.APP || path.join(__dirname, '_tmp', 'certtest', 'app'));
+const CFG_PATH = path.join(APP, 'agent.config.json');
 const TAG = Date.now().toString(36).slice(-4);
 // 班名里必须带年级字样：4-1-4 是四年级的课
 const CLA = '四年级问答界面' + TAG;
@@ -346,6 +349,55 @@ function compile(expr) { try { new Function('return (' + expr + ')'); return nul
       await waitFor(`!document.getElementById('view-quiz').hidden`, 30, 300);
       ok(!(await vis('#askShell .ask-fab')) && !(await vis('#askShell .ask-panel')), '切到课后小测页，问问不见了');
     } else console.log('  （没找到小测入口，跳过"小测页没有问问"这一条）');
+  }
+
+  // ---- 试用班（PART=pilot）：名单外的班，屏幕上连着落都没有 ----
+  // 老师 2026-10-16 要"先给 2023级5班用"，所以这里验的就是"别的班看不见"。
+  // ⚠️ 这一档自己往 agent.config.json 里塞试用班名单（**不放 key**，全程走离线，不花钱），
+  //    跟 PART=all 那两档不能同时跑（那两档的前提是出厂状态）。
+  if (PART === 'pilot') {
+    console.log('\n-- 试用班：只有名单里的班看得见问问 --');
+    const otherCls = '四年级别班' + TAG, otherName = '别班甲' + TAG;
+    await jfetch('/api/teacher/roster', 'POST', { text: otherCls + '，' + otherName }, T);
+    const setPilot = (v) => fs.writeFileSync(CFG_PATH, JSON.stringify(v, null, 2));
+    const gone = () => { try { fs.unlinkSync(CFG_PATH); } catch (e) {} };
+
+    const openSheetFor = async (name) => {
+      await send('Page.navigate', { url: BASE + '/quiz' });
+      await sleep(700);
+      await waitFor(`document.readyState==='complete' && !!document.getElementById('loginName')`, 40, 300);
+      await ev(`(function(){var n=document.getElementById('loginName');n.value=${JSON.stringify(name)};
+        n.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('loginGo').click();return 1})()`);
+      await waitFor(`!document.getElementById('view-map').hidden`, 40, 300);
+      await waitFor(`document.querySelectorAll('#gradeTabs .tab').length>0`, 40, 300);
+      await ev(`(function(){var t=[].slice.call(document.querySelectorAll('#gradeTabs .tab')).filter(function(x){return x.textContent.trim()==='4年级'})[0];if(t)t.click();return 1})()`);
+      await waitFor(`[].slice.call(document.querySelectorAll('.lesson')).some(function(x){return x.textContent.indexOf('数据的安全')>=0})`, 30, 300);
+      await ev(`(function(){var c=[].slice.call(document.querySelectorAll('.lesson')).filter(function(x){return x.textContent.indexOf('数据的安全')>=0})[0];
+        var b=[].slice.call(c.querySelectorAll('button')).filter(function(x){return x.textContent.indexOf('课内任务单')>=0})[0];
+        if(!b) return 'no btn'; b.click(); return 'ok';})()`);
+      await waitFor(`!document.getElementById('view-sheet').hidden`, 40, 300);
+      await sleep(500);   // hello 是异步拉到才决定露不露面，给它一拍
+      return ev(`(function(){var n=document.querySelector('#askShell .ask-fab');
+        if(!n) return {fab:false, shell:document.getElementById('askShell')?document.getElementById('askShell').hidden:null};
+        var r=n.getBoundingClientRect();
+        return {fab:r.width>1&&r.height>1, shell:document.getElementById('askShell').hidden};})()`);
+    };
+
+    setPilot({ pilotClasses: [CLA] });
+    const inList = await openSheetFor(S3);
+    ok(inList && inList.fab, '名单里的班（' + CLA + '）看得到「💬 问问」');
+    const notInList = await openSheetFor(otherName);
+    ok(notInList && !notInList.fab, '名单外的班（' + otherCls + '）看不见悬浮按钮');
+    ok(notInList && notInList.shell === true, '名单外的班连 #askShell 都还是收着的（不是画出来再藏）');
+
+    gone();
+    const back = await openSheetFor(otherName);
+    ok(back && back.fab, '名单去掉（热重载）之后，别班立刻又看得见了');
+
+    await jfetch('/api/teacher/progress/delete', 'POST', { uid: otherName + '｜' + otherCls }, T).catch(() => {});
+    await jfetch('/api/teacher/roster/delete', 'POST', { uid: otherName + '｜' + otherCls }, T).catch(() => {});
+    const afterPilot = (await jfetch('/api/teacher/agent-log?class=' + encodeURIComponent(otherCls), 'GET', null, T)).j;
+    ok((afterPilot.classes || []).indexOf(otherCls) < 0, '试用班测试用的临时班也清掉了');
   }
 
   ws.close(); kill(); await sleep(300);

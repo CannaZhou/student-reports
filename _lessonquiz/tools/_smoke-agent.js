@@ -226,6 +226,30 @@ const norm = (s) => String(s == null ? '' : s).replace(/[\s　]+/g, '').replace(
   ok(!fs.existsSync(progPath(D)), '正本没了');
   ok(!fs.existsSync(progPath(D) + '.bak'), '.bak 也没了（以前会留下，里面装着孩子问过的话）');
 
+  // ---------- 8b. 试用班：老师要一个班一个班地放开 ----------
+  console.log('\n-- 8b. 名单外的班：连路都不给（前端据此把整个问问藏起来）');
+  const otherCls = '四年级别班' + TAG;
+  const otherName = '别班甲' + TAG;
+  await jfetch('/api/teacher/roster', 'POST', { text: otherCls + '，' + otherName }, T);
+  const SKo = (await jfetch('/api/student/login', 'POST', { name: otherName, className: otherCls })).ck;
+  const hOpen = (await jfetch('/api/ask/hello?lessonId=4-1-4', 'GET', null, SKo)).j;
+  ok(hOpen.hidden !== true, '名单空着时，别的班照常能用（hidden=' + hOpen.hidden + '）');
+
+  setCfg({ pilotClasses: [CLA] });
+  const ho = (await jfetch('/api/ask/hello?lessonId=4-1-4', 'GET', null, SKo)).j;
+  ok(ho.hidden === true && ho.chips.length === 0, '填了试用班之后，别班的 hello 回 hidden（前端连按钮都不建）');
+  const ho2 = (await jfetch('/api/ask/hello?lessonId=4-1-4', 'GET', null, SK[B])).j;
+  ok(ho2.hidden !== true && ho2.chips.length > 0, '名单里的班照常拿到问候语和快捷问法');
+  const askOut = await jfetch('/api/ask', 'POST', { lessonId: '4-1-4', question: '别班能问吗' }, SKo);
+  ok(askOut.r.status === 403, '别班直接问 → 403（不是 200，也不记账）');
+  const histOut = await jfetch('/api/ask/history?lessonId=4-1-4', 'GET', null, SKo);
+  ok(histOut.r.status === 403, '别班读历史 → 403');
+  const logOut = await jfetch('/api/teacher/agent-log?class=' + encodeURIComponent(otherCls), 'GET', null, T);
+  ok(logOut.j.ok && (logOut.j.items || []).length === 0, '403 那一问没落盘（老师的册子不会多出脏数据）');
+  setCfg({});
+  const after = (await jfetch('/api/ask/hello?lessonId=4-1-4', 'GET', null, SKo)).j;
+  ok(after.hidden !== true, '把名单改回去就立刻恢复（热重载，不用重启）');
+
   // ---------- 9. 教师端：没提问的班/坏班级 ----------
   console.log('\n-- 9. 教师端页签的边角');
   const emptyCls = '四年级没人问过' + TAG;
@@ -238,11 +262,17 @@ const norm = (s) => String(s == null ? '' : s).replace(/[\s　]+/g, '').replace(
   ok(alNo.r.status === 401, '未登录读不到（孩子问的话不能给外人看）');
 
   // ---------- 收尾 ----------
+  // ⚠️ uid 是「姓名｜班级」，**班级得一个个对**：原来这里不管谁都按 CLA 拼，
+  //    于是"安静同学"和"别班甲"压根没删掉，跑一次留一批，隔离库越攒越脏。
   console.log('\n-- 收尾');
-  for (const n of NAMES.concat(['安静同学' + TAG])) {
-    await jfetch('/api/teacher/progress/delete', 'POST', { uid: UID(n) }, T);
-    await jfetch('/api/teacher/roster/delete', 'POST', { uid: UID(n) }, T);
+  const DOOM = NAMES.map((n) => [n, CLA])
+    .concat([['安静同学' + TAG, emptyCls], ['别班甲' + TAG, otherCls]]);
+  for (const [n, cls] of DOOM) {
+    await jfetch('/api/teacher/progress/delete', 'POST', { uid: n + '｜' + cls }, T);
+    await jfetch('/api/teacher/roster/delete', 'POST', { uid: n + '｜' + cls }, T);
   }
+  const leftOver = (await jfetch('/api/teacher/agent-log?class=' + encodeURIComponent(otherCls), 'GET', null, T)).j;
+  ok((leftOver.classes || []).indexOf(otherCls) < 0, '临时班在名单里也清掉了（别在隔离库里留测试生）');
   restoreCfg();
   ok(CFG_ORIG === null ? !fs.existsSync(CFG) : true, 'agent.config.json 已还原成出厂状态');
 
