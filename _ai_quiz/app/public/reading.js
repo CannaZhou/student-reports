@@ -83,10 +83,41 @@ $('#mainNav').addEventListener('click', (e) => {
 });
 
 // ---------------- 书架 ----------------
+// 每个书名的「系列·」前缀去掉，卡片上只留分册名
+function shortTitle(t) { return String(t || '').replace(/^[^·]*·\s*/, ''); }
+
+function masterShelfHTML(m) {
+  const rows = m.books.map((b) => {
+    const pct = b.chapterCount ? Math.round((b.checkedCount / b.chapterCount) * 100) : 0;
+    const done = b.completed ? ' done' : '';
+    return `<a class="book3d${done}" href="/library.html?id=${encodeURIComponent(b.id)}" title="${esc(b.title)}">
+      <div class="book3d-stage">
+        <div class="book3d-cover" style="background:${esc(b.spine)}">
+          <img src="${esc(b.cover)}" alt="${esc(b.title)}" loading="lazy">
+        </div>
+      </div>
+      <div class="book3d-meta">
+        <div class="bt">${esc(shortTitle(b.title))}</div>
+        <div class="bs">${esc(b.subtitle)}</div>
+        <div class="bbar"><i style="width:${pct}%"></i></div>
+        <div class="bc">${b.completed ? '🎉 已读完' : '已读 ' + b.checkedCount + ' / ' + b.chapterCount + ' 章'}</div>
+      </div>
+    </a>`;
+  }).join('');
+  return `<div class="shelf-group">
+    <div class="shelf-head"><h3>📚 名家绘本 · 未来侦探团</h3><span class="tip">全 ${m.books.length} 册 · 读完一章解锁下一章</span></div>
+    <div class="book-row">${rows}</div>
+    <p class="tip shelf-note">🔒 每章读完点「我读完啦」才会开启下一章 · 仅供校内阅读</p>
+  </div>`;
+}
+
 async function renderShelf() {
   view.innerHTML = '<p class="tip">加载中…</p>';
   try {
-    const r = await api('GET', '/api/reading/shelf');
+    const [r, m] = await Promise.all([
+      api('GET', '/api/reading/shelf'),
+      api('GET', '/api/library/shelf').catch(() => null),
+    ]);
     const s = r.shelf;
     let html = `<div class="book-intro">
       <h2>${esc(r.title)}</h2>
@@ -114,6 +145,8 @@ async function renderShelf() {
       </button>`;
     }
     html += '</div>';
+    // 名家绘本：单独一组，接口失败时整块不显示，不影响原书架
+    if (m && m.books && m.books.length) html += masterShelfHTML(m);
     view.innerHTML = html;
     view.querySelectorAll('.chapter-card:not([disabled])').forEach((b) => {
       b.addEventListener('click', () => openChapter(Number(b.dataset.no)));
@@ -327,7 +360,10 @@ async function renderCompanion() {
 async function renderPassbook() {
   view.innerHTML = '<p class="tip">加载中…</p>';
   try {
-    const r = await api('GET', '/api/reading/passbook');
+    const [r, mb] = await Promise.all([
+      api('GET', '/api/reading/passbook'),
+      api('GET', '/api/library/shelf').catch(() => null),
+    ]);
     const ALL_BADGES = [
       { id: 'starter', em: '🚀', name: '启程之星', ds: '闯过第一关' },
       { id: 'reader', em: '📚', name: '阅读新星', ds: '完成3章冒险' },
@@ -353,6 +389,17 @@ async function renderPassbook() {
       html += `<tr><td>${c.no}. ${esc(c.title)}</td><td>${c.storyRead ? '✅' : '—'}</td><td>${c.quizDone ? '✅' : '—'}</td><td>${c.quizDone ? c.quizScore + '/' + c.quizTotal : '—'}</td></tr>`;
     }
     html += `</table></div>`;
+    // 名家绘本：只读回显，点书名跳到书目页
+    if (mb && mb.books && mb.books.length) {
+      html += `<div class="card"><h4>📚 名家绘本 · 未来侦探团</h4><table><tr><th>书名</th><th>已读</th><th>状态</th></tr>`;
+      for (const b of mb.books) {
+        const pct = b.chapterCount ? Math.round((b.checkedCount / b.chapterCount) * 100) : 0;
+        html += `<tr><td><a href="/library.html?id=${encodeURIComponent(b.id)}">${esc(shortTitle(b.title))}</a></td>
+          <td>${b.checkedCount} / ${b.chapterCount} 章</td>
+          <td>${b.completed ? '🎉 已读完' : pct > 0 ? '📖 读到第 ' + b.unlockedNo + ' 章' : '—'}</td></tr>`;
+      }
+      html += `</table></div>`;
+    }
     view.innerHTML = html;
   } catch (e) { view.innerHTML = `<p class="tip">${esc(e.message)}</p>`; }
 }

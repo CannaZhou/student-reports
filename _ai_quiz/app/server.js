@@ -11,6 +11,7 @@ const { createRouter } = require('./routes/router.js');
 const studentRoutes = require('./routes/student.js');
 const teacherRoutes = require('./routes/teacher.js');
 const readingRoutes = require('./routes/reading.js');
+const libraryRoutes = require('./routes/library.js');
 const staticServe = require('./routes/static.js').serve;
 const { json } = require('./routes/helpers.js');
 
@@ -40,6 +41,7 @@ const router = createRouter();
 studentRoutes.register(router, { store, config: CONFIG });
 teacherRoutes.register(router, { store, config: CONFIG });
 readingRoutes.register(router, { store, config: CONFIG });
+libraryRoutes.register(router, { store, config: CONFIG });
 
 const server = http.createServer(async (req, res) => {
   try {

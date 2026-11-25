@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>阅读 · 名家绘本</title>
+<link rel="stylesheet" href="/assets/shared.css?v=8">
+<link rel="stylesheet" href="/assets/reader.css?v=2">
+</head>
+<body class="reader-body">
+<div class="reader">
+  <header class="rbar">
+    <a class="rback" id="backLink" href="/reading.html">← 目录</a>
+    <div class="rtitle" id="rTitle">载入中…</div>
+    <button class="rtoc" id="tocBtn">☰ 目录</button>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="layer" id="layerA"><img alt=""></div>
+    <div class="layer" id="layerB"><img alt=""></div>
+    <button class="rnav prev" id="prevBtn" aria-label="上一页">‹</button>
+    <button class="rnav next" id="nextBtn" aria-label="下一页">›</button>
+    <div class="loading" id="loading">载入中…</div>
+    <div class="errbox hidden" id="errBox"></div>
+  </div>
+
+  <footer class="rfoot">
+    <div class="rprog"><i id="progBar"></i></div>
+    <div class="rnum" id="pageNum">–</div>
+  </footer>
+</div>
+
+<div class="drawer-mask" id="tocMask"></div>
+<aside class="drawer" id="tocDrawer" aria-hidden="true">
+  <div class="drawer-head"><span>目录</span><button class="drawer-x" id="tocClose">✕</button></div>
+  <div class="drawer-body" id="tocBody"></div>
+  <div class="drawer-foot" id="tocFoot"></div>
+</aside>
+
+<div class="checkin" id="checkin"><div class="ck-inner" id="ckInner"></div></div>
+
+<div id="toast" class="toast"></div>
+<script src="/assets/reader.js?v=2"></script>
+</body>
+</html>

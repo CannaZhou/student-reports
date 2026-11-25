@@ -39,6 +39,69 @@
 .chapter-card .mtip { font-size: 13px; color: #888; }
 .chapter-card .tags { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
 
+/* ---- 名家绘本：一本一本立着的书 ---- */
+.shelf-group { margin-top: 26px; }
+.shelf-head {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px;
+  padding-bottom: 8px; margin-bottom: 14px; border-bottom: 2px dashed var(--line);
+}
+.shelf-head h3 { font-size: 18px; color: var(--primary-dark); }
+.shelf-note { margin-top: 12px; text-align: center; }
+
+.book-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+  align-items: start; perspective: 1100px;
+}
+.book3d { display: block; color: inherit; min-width: 0; }
+.book3d-stage { position: relative; padding-bottom: 10px; }
+.book3d-cover {
+  position: relative; aspect-ratio: 3 / 4; border-radius: 3px 9px 9px 3px;
+  overflow: hidden; background: #dfe7dc;
+  box-shadow: 0 10px 20px rgba(20,40,20,.22), 0 2px 4px rgba(0,0,0,.12);
+  transform: rotateY(-9deg); transform-origin: left center;
+  transition: transform .28s cubic-bezier(.22,.61,.36,1), box-shadow .28s;
+}
+/* 书脊：一道深色窄条 + 高光 */
+.book3d-cover::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 11px; z-index: 2;
+  background: linear-gradient(90deg, rgba(0,0,0,.42), rgba(0,0,0,.12) 55%, rgba(255,255,255,.22));
+}
+/* 书页侧边：右下薄薄一层 */
+.book3d-cover::after {
+  content: ''; position: absolute; right: 0; top: 3px; bottom: 3px; width: 3px;
+  background: linear-gradient(90deg, rgba(0,0,0,.10), rgba(255,255,255,.75));
+}
+.book3d-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.book3d:hover .book3d-cover {
+  transform: rotateY(0) translateY(-7px);
+  box-shadow: 0 18px 30px rgba(20,40,20,.30), 0 3px 6px rgba(0,0,0,.16);
+}
+.book3d-meta { margin-top: 10px; padding: 0 2px; }
+.book3d-meta .bt { font-size: 15px; font-weight: 700; color: var(--primary-dark); }
+.book3d-meta .bs { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.book3d-meta .bbar {
+  height: 5px; border-radius: 4px; background: #e6ece2; overflow: hidden; margin: 7px 0 5px;
+}
+.book3d-meta .bbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), #7fbf6a); }
+.book3d-meta .bc { font-size: 12px; color: var(--muted); }
+.book3d.done .bc { color: var(--success); font-weight: 700; }
+
+@media (max-width: 560px) {
+  /* 手机上原书架一章一屏太高，压成两列，让学生滑得动到下面的名家绘本 */
+  .shelf-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .chapter-card { padding: 12px; }
+  .chapter-card .ct { font-size: 14px; }
+  .chapter-card .mtip { font-size: 12px; }
+  .chapter-card .no-tag { width: 28px; height: 28px; line-height: 28px; font-size: 13px; margin-bottom: 6px; }
+}
+@media (max-width: 700px) {
+  .book-row { grid-template-columns: repeat(2, 1fr); gap: 14px 12px; }
+  .book3d-meta .bt { font-size: 14px; }
+}
+@media (max-width: 380px) {
+  .book-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+}
+
 /* ---- 阅读页 ---- */
 .back-btn { background: #eef1f6; color: #556; margin-bottom: 12px; }
 .chapter-head { margin-bottom: 10px; }

@@ -1,0 +1,77 @@
+/* 名家绘本：书目页 / 阅读器 共用外观 */
+:root {
+  --ink: #24331f;
+  --paper: #fbfaf6;
+}
+
+.back-link {
+  display: inline-block; margin-bottom: 14px; font-size: 14px; color: var(--primary);
+  background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 6px 14px;
+}
+
+/* ---- 书目头 ---- */
+.book-head {
+  display: flex; gap: 18px; align-items: flex-start;
+  background: linear-gradient(135deg, #ffffff, #f4f9f1);
+  border-radius: 16px; padding: 18px; margin-bottom: 18px;
+  box-shadow: 0 1px 5px rgba(30, 60, 30, .10);
+}
+.bh-cover {
+  width: 132px; flex-shrink: 0; aspect-ratio: 3 / 4; border-radius: 3px 8px 8px 3px;
+  overflow: hidden; box-shadow: 0 8px 16px rgba(20, 40, 20, .22);
+  background: #e3e9df;
+}
+.bh-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bh-info { flex: 1; min-width: 0; }
+.bh-info h2 { font-size: 21px; line-height: 1.35; margin-bottom: 4px; }
+.bh-sub { color: var(--primary); font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.bh-meta { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.bh-bar { height: 7px; border-radius: 5px; background: #e6ece2; overflow: hidden; margin: 12px 0 6px; }
+.bh-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), #7fbf6a); transition: width .4s; }
+.bh-count { font-size: 13px; color: var(--muted); }
+.bh-count b { color: var(--primary-dark); font-size: 16px; }
+
+/* ---- 章节列表 ---- */
+.ch-card {
+  display: flex; align-items: center; gap: 14px;
+  background: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+  box-shadow: 0 1px 4px rgba(30, 60, 30, .08); border: 2px solid transparent;
+  cursor: pointer; transition: transform .12s, border-color .12s, box-shadow .12s;
+  outline: none;
+}
+.ch-card:hover, .ch-card:focus-visible {
+  transform: translateY(-2px); border-color: #cfe3c8;
+  box-shadow: 0 6px 16px rgba(30, 60, 30, .12);
+}
+.ch-no {
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #e7f3e9; color: var(--primary-dark); font-weight: 800; font-size: 16px;
+}
+.ch-main { flex: 1; min-width: 0; }
+.ch-title { font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 3px; }
+.ch-sub { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ch-note {
+  margin-top: 6px; font-size: 13px; color: #5c6b52; background: #f5f9f2;
+  border-left: 3px solid #cfe3c8; border-radius: 0 6px 6px 0; padding: 5px 9px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.ch-go { flex-shrink: 0; font-size: 14px; color: var(--primary); font-weight: 600; }
+
+.ch-card.locked {
+  cursor: not-allowed; background: #f4f5f3; box-shadow: none; opacity: .78;
+}
+.ch-card.locked:hover { transform: none; border-color: transparent; box-shadow: none; }
+.ch-card.locked .ch-no { background: #e9ecea; color: #a8b1a4; }
+.ch-card.locked .ch-title { color: #8a9486; }
+.ch-card.ch-next { border-color: var(--accent); }
+.ch-card.ch-next .ch-go { color: var(--accent); }
+
+@media (max-width: 560px) {
+  .book-head { flex-direction: column; align-items: center; text-align: center; }
+  .bh-cover { width: 108px; }
+  .ch-card { padding: 12px; gap: 10px; }
+  .ch-no { width: 34px; height: 34px; font-size: 14px; }
+  .ch-title { font-size: 15px; }
+  .ch-go { font-size: 13px; }
+}

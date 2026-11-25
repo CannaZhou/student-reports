@@ -1,0 +1,5 @@
+fd-ai  8章 171页  18.4MB  rev=8ee9838b
+fd-sat  8章 160页  18.2MB  rev=464b9ccb
+fd-data  8章 159页  16.7MB  rev=d50b2a7e
+fd-disaster  8章 164页  22.9MB  rev=550f8031
+合计 76.2 MB

@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const EXT = new Set(['.html', '.css', '.js', '.png', '.svg', '.ico', '.jpg', '.jpeg', '.gif', '.woff', '.woff2']);
+const EXT = new Set(['.html', '.css', '.js', '.png', '.svg', '.ico', '.jpg', '.jpeg', '.gif', '.webp', '.woff', '.woff2']);
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -13,6 +13,7 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
+  '.webp': 'image/webp',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 };
@@ -27,6 +28,9 @@ function serve(req, res, ctx) {
   if (pathname === '/' ) pathname = '/index.html';
   else if (pathname === '/student') pathname = '/student.html';
   else if (pathname === '/teacher') pathname = '/teacher.html';
+  else if (pathname === '/reading') pathname = '/reading.html';
+  else if (pathname === '/library') pathname = '/library.html';
+  else if (pathname === '/reader') pathname = '/reader.html';
 
   if (!pathname.startsWith('/')) { res.writeHead(400); return res.end('Bad Request'); }
   const full = path.normalize(path.join(config.publicDir, pathname));

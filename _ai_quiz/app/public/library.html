@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>名家绘本 · 阅读馆</title>
+<link rel="stylesheet" href="/assets/shared.css?v=8">
+<link rel="stylesheet" href="/assets/books.css?v=1">
+</head>
+<body>
+<div class="topbar">
+  <div class="container">
+    <img class="logo" src="/assets/logo_raw.png" alt="校徽">
+    <h1>📚 名家绘本馆</h1>
+    <span class="who hidden" id="who"></span>
+    <button class="sm secondary hidden" id="logoutBtn">退出</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 登录 -->
+  <div id="loginBox" class="login-box hidden">
+    <div class="card">
+      <h2 class="center">🌟 先登录再读书</h2>
+      <p class="tip center">用你平时读《小AI探险队》的姓名和密码</p>
+      <label>姓名</label>
+      <input id="loginName" placeholder="请输入你的名字">
+      <label>密码</label>
+      <input id="loginPw" type="password" placeholder="请输入密码">
+      <button class="mt" style="width:100%; padding:12px;" id="loginBtn">开始阅读</button>
+      <p class="tip mt center">密码请询问老师（默认 zqxx2025）</p>
+      <p class="tip mt center"><a href="/reading.html">← 回到阅读馆</a></p>
+    </div>
+  </div>
+
+  <!-- 书 -->
+  <div id="bookBox" class="hidden">
+    <a class="back-link" href="/reading.html">← 返回书架</a>
+    <div class="book-head">
+      <div class="bh-cover"><img id="bookCover" alt=""></div>
+      <div class="bh-info">
+        <h2 id="bookTitle">—</h2>
+        <div class="bh-sub" id="bookSub"></div>
+        <div class="bh-meta" id="bookMeta"></div>
+        <div class="bh-bar"><i id="bookBar" style="width:0%"></i></div>
+        <div class="bh-count" id="bookCount"></div>
+      </div>
+    </div>
+    <div id="chapterList"></div>
+    <p class="tip center" style="margin-top:18px">🔒 读完一章并点「我读完啦」，下一章才会打开 · 本书仅供校内阅读</p>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/assets/library.js?v=2"></script>
+</body>
+</html>

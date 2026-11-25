@@ -1,6 +1,9 @@
 # 运行时数据（含密码哈希、学生进度；整体拷贝部署时保留在磁盘上，不入库）
 app/data/
 
+# 名家绘本的漫画页（约 76MB，用 tools/build_library.py 重建；清单 app/content/library.json 入库）
+app/media/books/
+
 # 大模型密钥（部署时手动放入，勿提交）
 app/llm.config.json
 
@@ -14,3 +17,11 @@ CURRENT_URL.txt
 # PPT/文档临时检查产物
 tools/inspect_out.txt
 tools/pptx_extract/
+
+# 验收截图（约 33MB）与改题前的题库备份：只留本机，不入库
+_shots/
+_backup_20260917/
+_test_out.txt
+_test_err.txt
+tunnel_recent.out
+tunnel_test.log

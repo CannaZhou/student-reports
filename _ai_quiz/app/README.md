@@ -54,6 +54,8 @@ app/
 ├─ routes/              # 学生API / 教师API / 静态文件
 ├─ public/              # 前端页面（原生JS，无构建）
 ├─ data/                # 运行时数据：题库 + 学生 + 教师 + 每人进度
+├─ content/             # 名家绘本书目 library.json / 小测题 library-quizzes.json（入库）
+├─ media/books/         # 名家绘本漫画页（约 76MB，不入库，见第七节）
 ├─ lib/                 # 离线拷贝的 xlsx / jszip（导入文件解析用）
 └─ README.md
 ```
@@ -137,7 +139,59 @@ app/data/
 6. **守护进程**（关掉终端服务不中断）：Windows 用 `nssm`，Linux 用 `systemd`
 7. **改密码**：上线后第一时间在教师端 ⚙️ 设置里修改教师密码
 
-## 七、维护
+## 七、名家绘本馆（未来侦探团）
+
+阅读馆（`/reading.html`）书架下方新增一组**已出版漫画书**，与原创绘本《小AI探险队》完全独立（两套进度、两套数据互不影响）。
+
+| 入口 | 地址 |
+|---|---|
+| 书架 | `/reading.html`（登录后，「📚 名家绘本 · 未来侦探团」四本立体封面） |
+| 书目页 | `/library.html?id=fd-ai`（8 章列表 + 解锁状态 + 打卡记录） |
+| 阅读器 | `/reader.html?id=fd-ai&ch=1`（翻页 / 目录 / 打卡） |
+
+四本书 id：`fd-ai` 人工智能篇、`fd-sat` 卫星篇、`fd-data` 大数据篇、`fd-disaster` 防灾救灾篇。
+
+**规则**：每本 8 章；第 1 章直接可读，**翻到本章最后一页并点「我读完啦」**（可写一句感想，200 字以内）才解锁下一章。解锁状态由服务端每次实时计算（不存"已解锁"字段），前端藏按钮不算数，未解锁章节的图片接口直接 403。
+
+**版权**：4 本均为正式出版物。漫画页放在 `app/media/books/`（**故意不在 `public/` 下**），只能通过登录后的 `/api/library/page/...` 读取，带一年私有缓存头；页面加 `noindex`。这是提高门槛，不是保证——正式对外发布前需要出版社授权。
+
+### 内容文件
+
+| 文件 | 说明 | 入库 |
+|---|---|---|
+| `app/content/library.json` | 书目清单：书名 / ISBN / 作者 / 每章页数 / `rev` | ✅ |
+| `app/content/library-quizzes.json` | 每章小测题目（初始为空，老师后续添加） | ✅ |
+| `app/media/books/<id>/{cover,chNN/NNN}.webp` | 漫画页，约 76MB | ❌（`.gitignore`） |
+
+`library.json` 与 `books.json` 一样**只在启动时读一次**：改书名、章节名、页数后要重启 8080。打卡与做题是即时落盘，不用重启。
+
+### 重建图片
+
+源文件（EPUB ×3 + PDF ×1）在
+`f:\桌面\临时存放\桌面所有图标\2025年师生共读书本活动\阅读之路启动\`（建议另存一份到 `F:\cursor20260624\_books_src\`，临时目录会被清理）。
+
+```bash
+cd _ai_quiz
+python -I tools/build_library.py            # 增量：已存在的页跳过
+python -I tools/build_library.py --rebuild  # 全量重压（换参数后用这个）
+python -I tools/build_library.py --dry-run  # 只算体积，不写文件
+```
+
+依赖 Python 3.7 + PyMuPDF + Pillow。重建会自动更新 `library.json` 的 `rev`，图片 URL 里的 `?v=` 随之变化，浏览器自动取新图。构建报告写在 `tools/_library_build_report.txt`。
+
+### 验收
+
+```bash
+node tools/smoke_library.js   # 隔离实例 8082，临时数据，47 项断言（不碰线上数据/真实题目）
+node _verify_library.js       # 隔离实例 8083 + 无头 Edge，截图到 _shots/lib-*.png
+```
+
+### 小测（第二阶段）
+
+后端已就绪：`GET/PUT /api/teacher/library/quiz/:bookId/:no` 存题，`GET /api/library/book/:id/chapter/:no/quiz` 与 `POST .../quiz/submit` 给学生做题（复用 `core/grade.js`，支持单选/判断/多选/填空）。
+**教师端出题页面还没做**——要加题时先直接编辑 `app/content/library-quizzes.json`（格式见 `core/library.js` 的 `getQuiz`），或等下一阶段补上「📖 绘本题目」页签。
+
+## 八、维护
 
 - **换题目**：教师端"题目管理"导入即可，自动合并进现有题库；误删的题可用备份恢复
 - **加学生**：教师端"学生名单"随时添加，新学生用同样密码 `zqxx2025` 登录即可

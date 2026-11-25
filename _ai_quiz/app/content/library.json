@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "builtAt": "2026-11-07T11:14:05+08:00",
+  "rev": "b98df5f0",
+  "series": "未来侦探团",
+  "image": {
+    "format": "webp",
+    "width": 880,
+    "quality": 60
+  },
+  "books": [
+    {
+      "id": "fd-ai",
+      "title": "未来侦探团·人工智能篇",
+      "subtitle": "机器少年",
+      "series": "未来侦探团",
+      "author": "千鹤动漫 编绘",
+      "publisher": "人民邮电出版社",
+      "isbn": "9787115574107",
+      "spine": "#2f5d8a",
+      "cover": "cover.webp",
+      "intro": "",
+      "chapters": [
+        {
+          "no": 1,
+          "title": "了解人工智能",
+          "chapterTitle": "第一章 了解人工智能",
+          "dir": "ch01",
+          "pageCount": 13
+        },
+        {
+          "no": 2,
+          "title": "消失的洛神",
+          "chapterTitle": "第二章 消失的洛神",
+          "dir": "ch02",
+          "pageCount": 21
+        },
+        {
+          "no": 3,
+          "title": "极速追击",
+          "chapterTitle": "第三章 极速追击",
+          "dir": "ch03",
+          "pageCount": 22
+        },
+        {
+          "no": 4,
+          "title": "机器人墓地",
+          "chapterTitle": "第四章 机器人墓地",
+          "dir": "ch04",
+          "pageCount": 24
+        },
+        {
+          "no": 5,
+          "title": "极限逃生",
+          "chapterTitle": "第五章 极限逃生",
+          "dir": "ch05",
+          "pageCount": 20
+        },
+        {
+          "no": 6,
+          "title": "游乐场惊魂",
+          "chapterTitle": "第六章 游乐场惊魂",
+          "dir": "ch06",
+          "pageCount": 27
+        },
+        {
+          "no": 7,
+          "title": "李博士的秘密",
+          "chapterTitle": "第七章 李博士的秘密",
+          "dir": "ch07",
+          "pageCount": 21
+        },
+        {
+          "no": 8,
+          "title": "最后的秘密武器",
+          "chapterTitle": "第八章 最后的秘密武器",
+          "dir": "ch08",
+          "pageCount": 23
+        }
+      ]
+    },
+    {
+      "id": "fd-sat",
+      "title": "未来侦探团·卫星篇",
+      "subtitle": "北斗星的指引",
+      "series": "未来侦探团",
+      "author": "千鹤动漫 编绘",
+      "publisher": "人民邮电出版社",
+      "isbn": "9787115575319",
+      "spine": "#1f6f78",
+      "cover": "cover.webp",
+      "intro": "",
+      "chapters": [
+        {
+          "no": 1,
+          "title": "国际卫星大会",
+          "chapterTitle": "第一章 国际卫星大会",
+          "dir": "ch01",
+          "pageCount": 20
+        },
+        {
+          "no": 2,
+          "title": "不可能的犯罪",
+          "chapterTitle": "第二章 不可能的犯罪",
+          "dir": "ch02",
+          "pageCount": 20
+        },
+        {
+          "no": 3,
+          "title": "迷途森林",
+          "chapterTitle": "第三章 迷途森林",
+          "dir": "ch03",
+          "pageCount": 20
+        },
+        {
+          "no": 4,
+          "title": "北极星就在那里",
+          "chapterTitle": "第四章 北极星就在那里",
+          "dir": "ch04",
+          "pageCount": 20
+        },
+        {
+          "no": 5,
+          "title": "第二个嫌犯",
+          "chapterTitle": "第五章 第二个嫌犯",
+          "dir": "ch05",
+          "pageCount": 20
+        },
+        {
+          "no": 6,
+          "title": "未来侦探团出击",
+          "chapterTitle": "第六章 未来侦探团出击",
+          "dir": "ch06",
+          "pageCount": 20
+        },
+        {
+          "no": 7,
+          "title": "动物总动员",
+          "chapterTitle": "第七章 动物总动员",
+          "dir": "ch07",
+          "pageCount": 20
+        },
+        {
+          "no": 8,
+          "title": "大航天时代",
+          "chapterTitle": "第八章 大航天时代",
+          "dir": "ch08",
+          "pageCount": 20
+        }
+      ]
+    },
+    {
+      "id": "fd-data",
+      "title": "未来侦探团·大数据篇",
+      "subtitle": "数据战队",
+      "series": "未来侦探团",
+      "author": "千鹤动漫 编绘",
+      "publisher": "人民邮电出版社",
+      "isbn": "9787115577344",
+      "spine": "#7a4b8f",
+      "cover": "cover.webp",
+      "intro": "",
+      "chapters": [
+        {
+          "no": 1,
+          "title": "陌生来电",
+          "chapterTitle": "第一章 陌生来电",
+          "dir": "ch01",
+          "pageCount": 17
+        },
+        {
+          "no": 2,
+          "title": "面对“银河战舰”",
+          "chapterTitle": "第二章 面对“银河战舰”",
+          "dir": "ch02",
+          "pageCount": 20
+        },
+        {
+          "no": 3,
+          "title": "大数据中心",
+          "chapterTitle": "第三章 大数据中心",
+          "dir": "ch03",
+          "pageCount": 21
+        },
+        {
+          "no": 4,
+          "title": "隐藏的关键人物",
+          "chapterTitle": "第四章 隐藏的关键人物",
+          "dir": "ch04",
+          "pageCount": 20
+        },
+        {
+          "no": 5,
+          "title": "逆转监督",
+          "chapterTitle": "第五章 逆转监督",
+          "dir": "ch05",
+          "pageCount": 19
+        },
+        {
+          "no": 6,
+          "title": "大数据思维",
+          "chapterTitle": "第六章 大数据思维",
+          "dir": "ch06",
+          "pageCount": 17
+        },
+        {
+          "no": 7,
+          "title": "天网恢恢",
+          "chapterTitle": "第七章 天网恢恢",
+          "dir": "ch07",
+          "pageCount": 22
+        },
+        {
+          "no": 8,
+          "title": "击败“银河战舰”",
+          "chapterTitle": "第八章 击败“银河战舰”",
+          "dir": "ch08",
+          "pageCount": 23
+        }
+      ]
+    },
+    {
+      "id": "fd-disaster",
+      "title": "未来侦探团·防灾救灾篇",
+      "subtitle": "大自然的复仇",
+      "series": "未来侦探团",
+      "author": "千鹤动漫 编绘",
+      "publisher": "人民邮电出版社",
+      "isbn": "9787115581693",
+      "spine": "#b1541f",
+      "cover": "cover.webp",
+      "intro": "",
+      "chapters": [
+        {
+          "no": 1,
+          "title": "新成就",
+          "chapterTitle": "第一章 新成就",
+          "dir": "ch01",
+          "pageCount": 20
+        },
+        {
+          "no": 2,
+          "title": "奇怪的经理",
+          "chapterTitle": "第二章 奇怪的经理",
+          "dir": "ch02",
+          "pageCount": 20
+        },
+        {
+          "no": 3,
+          "title": "幕后黑手",
+          "chapterTitle": "第三章 幕后黑手",
+          "dir": "ch03",
+          "pageCount": 20
+        },
+        {
+          "no": 4,
+          "title": "地震预警与遥感",
+          "chapterTitle": "第四章 地震预警与遥感",
+          "dir": "ch04",
+          "pageCount": 20
+        },
+        {
+          "no": 5,
+          "title": "人机的斗争",
+          "chapterTitle": "第五章 人机的斗争",
+          "dir": "ch05",
+          "pageCount": 24
+        },
+        {
+          "no": 6,
+          "title": "地底求生记",
+          "chapterTitle": "第六章 地底求生记",
+          "dir": "ch06",
+          "pageCount": 20
+        },
+        {
+          "no": 7,
+          "title": "大战改造怪物",
+          "chapterTitle": "第七章 大战改造怪物",
+          "dir": "ch07",
+          "pageCount": 20
+        },
+        {
+          "no": 8,
+          "title": "卷土重来",
+          "chapterTitle": "第八章 卷土重来",
+          "dir": "ch08",
+          "pageCount": 20
+        }
+      ]
+    }
+  ]
+}
